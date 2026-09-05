@@ -18,6 +18,31 @@ namespace {
 
 AppBrowserClient* g_instance = nullptr;
 
+int HexToVal(char c) {
+  if (c >= '0' && c <= '9') return c - '0';
+  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+  return -1;
+}
+
+std::string UrlDecode(const std::string& in) {
+  std::string out;
+  out.reserve(in.length());
+  for (size_t i = 0; i < in.length(); ++i) {
+    if (in[i] == '%' && i + 2 < in.length()) {
+      int h1 = HexToVal(in[i + 1]);
+      int h2 = HexToVal(in[i + 2]);
+      if (h1 != -1 && h2 != -1) {
+        out += static_cast<char>((h1 << 4) | h2);
+        i += 2;
+        continue;
+      }
+    }
+    out += in[i];
+  }
+  return out;
+}
+
 }  // namespace
 
 AppBrowserClient::AppBrowserClient() {
@@ -115,7 +140,7 @@ bool AppBrowserClient::OnBeforeBrowse(CefRefPtr<CefBrowser> browser,
       size_t start = pos + key.length() + 1;
       size_t end = query.find('&', start);
       std::string val = (end == std::string::npos) ? query.substr(start) : query.substr(start, end - start);
-      return CefURIDecode(val, true, UU_NORMAL).ToString();
+      return UrlDecode(val);
     };
 
     if (command == "spawn") {
@@ -126,8 +151,17 @@ bool AppBrowserClient::OnBeforeBrowse(CefRefPtr<CefBrowser> browser,
         // Search for cache buster parameter &_t= if present
         size_t end = query.find("&_t=", start);
         std::string raw_val = (end == std::string::npos) ? query.substr(start) : query.substr(start, end - start);
-        target_url = CefURIDecode(raw_val, true, UU_NORMAL).ToString();
+        target_url = UrlDecode(raw_val);
       }
+
+      // Trim any whitespace
+      while (!target_url.empty() && (target_url.front() == ' ' || target_url.front() == '\t')) {
+        target_url.erase(0, 1);
+      }
+      while (!target_url.empty() && (target_url.back() == ' ' || target_url.back() == '\t' || target_url.back() == '\r' || target_url.back() == '\n')) {
+        target_url.pop_back();
+      }
+
       if (!target_url.empty()) {
         ProcessManager::GetInstance()->SpawnChild(target_url);
       }
