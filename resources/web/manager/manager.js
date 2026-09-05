@@ -207,7 +207,7 @@ document.addEventListener('DOMContentLoaded', () => {
               <span class="folder-title" title="더블 클릭하여 폴더명 변경">${escapeHtml(group.name)}</span>
               <span class="folder-count-badge">${itemsInGroup.length}개</span>
             </div>
-            <div class="folder-header-actions" onclick="event.stopPropagation()">
+            <div class="folder-header-actions">
               <button type="button" class="btn-folder-action edit-group" data-action="rename-group" data-group-id="${group.id}" title="그룹명 변경">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
@@ -626,12 +626,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Double click group title to rename
   groupListEl.addEventListener('dblclick', (e) => {
-    const titleEl = e.target.closest('.group-title');
+    const titleEl = e.target.closest('.folder-title, .group-title');
     if (!titleEl) return;
-    const header = titleEl.closest('.group-header');
+    const header = titleEl.closest('.folder-header, .group-header');
     if (!header) return;
     const groupId = header.getAttribute('data-group-id');
-    openGroupModal('rename', groupId);
+    if (groupId) {
+      openGroupModal('rename', groupId);
+    }
   });
 
   // Handle Process Name Rename Form Submit

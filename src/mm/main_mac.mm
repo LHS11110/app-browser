@@ -128,10 +128,26 @@ void SetWindowTranslucent(CefWindowHandle handle, float alpha) {
   dispatch_async(dispatch_get_main_queue(), ^{
     NSView* view = CAST_CEF_WINDOW_HANDLE_TO_NSVIEW(handle);
     if (!view) return;
-    NSWindow* window = [view window];
-    if (window) {
+
+    auto configureWindow = ^(NSWindow* window) {
+      if (!window) return;
+      [window setOpaque:NO];
+      [window setBackgroundColor:[NSColor clearColor]];
       [window setAlphaValue:alpha];
       [window setHasShadow:YES];
+      [window setTitlebarAppearsTransparent:YES];
+      [view setWantsLayer:YES];
+      view.layer.backgroundColor = [NSColor clearColor].CGColor;
+      view.layer.opaque = NO;
+    };
+
+    NSWindow* window = [view window];
+    if (window) {
+      configureWindow(window);
+    } else {
+      dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(50 * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{
+        configureWindow([view window]);
+      });
     }
   });
 }

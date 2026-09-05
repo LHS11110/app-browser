@@ -47,6 +47,10 @@ class AppBrowserWindowDelegate : public CefWindowDelegate {
     window->AddChildView(browser_view_);
     window->Layout();
     window->CenterWindow(CefSize(config_.width, config_.height));
+    if (is_search_) {
+      window->SetBackgroundColor(CefColorSetARGB(0, 0, 0, 0));
+      browser_view_->SetBackgroundColor(CefColorSetARGB(0, 0, 0, 0));
+    }
     window->Show();
     window->Activate();
     window->BringToTop();
@@ -54,6 +58,14 @@ class AppBrowserWindowDelegate : public CefWindowDelegate {
     if (config_.is_translucent) {
       SetWindowTranslucent(window->GetWindowHandle(), config_.alpha);
     }
+  }
+
+  bool IsFrameless(CefRefPtr<CefWindow> window) override {
+    return is_search_;
+  }
+
+  bool CanResize(CefRefPtr<CefWindow> window) override {
+    return !is_search_;
   }
 
   void OnWindowDestroyed(CefRefPtr<CefWindow> window) override {
@@ -130,6 +142,10 @@ void AppBrowserApp::OnContextInitialized() {
 
   CefBrowserSettings browser_settings;
   browser_settings.background_color = CefColorSetARGB(255, 255, 255, 255);
+
+  CefBrowserSettings transparent_settings;
+  transparent_settings.background_color = CefColorSetARGB(0, 0, 0, 0);
+
   CefRefPtr<AppBrowserClient> client(new AppBrowserClient(config_));
 
   // 1. Child Browser Process Mode
@@ -153,10 +169,10 @@ void AppBrowserApp::OnContextInitialized() {
     search_config.min_width = 300;
     search_config.min_height = 50;
     search_config.is_translucent = true;
-    search_config.alpha = 0.96f;
+    search_config.alpha = 1.0f;
 
     CefRefPtr<CefBrowserView> search_browser_view = CefBrowserView::CreateBrowserView(
-        client, search_config.url, browser_settings, nullptr, nullptr,
+        client, search_config.url, transparent_settings, nullptr, nullptr,
         new AppBrowserViewDelegate());
 
     CefRefPtr<CefWindow> window = CefWindow::CreateTopLevelWindow(
@@ -179,10 +195,10 @@ void AppBrowserApp::OnContextInitialized() {
   manager_config.min_width = 380;
   manager_config.min_height = 480;
   manager_config.is_translucent = true;
-  manager_config.alpha = 0.94f;
+  manager_config.alpha = 0.88f;
 
   CefRefPtr<CefBrowserView> manager_browser_view = CefBrowserView::CreateBrowserView(
-      client, manager_config.url, browser_settings, nullptr, nullptr,
+      client, manager_config.url, transparent_settings, nullptr, nullptr,
       new AppBrowserViewDelegate());
 
   CefRefPtr<CefWindow> manager_window = CefWindow::CreateTopLevelWindow(
@@ -198,10 +214,10 @@ void AppBrowserApp::OnContextInitialized() {
   search_config.min_width = 300;
   search_config.min_height = 50;
   search_config.is_translucent = true;
-  search_config.alpha = 0.96f;
+  search_config.alpha = 1.0f;
 
   CefRefPtr<CefBrowserView> search_browser_view = CefBrowserView::CreateBrowserView(
-      client, search_config.url, browser_settings, nullptr, nullptr,
+      client, search_config.url, transparent_settings, nullptr, nullptr,
       new AppBrowserViewDelegate());
 
   CefRefPtr<CefWindow> search_window = CefWindow::CreateTopLevelWindow(
