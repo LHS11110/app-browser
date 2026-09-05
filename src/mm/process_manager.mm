@@ -1,4 +1,5 @@
 #include "process_manager.h"
+#include "app.h"
 
 #import <Cocoa/Cocoa.h>
 #include <signal.h>
@@ -266,6 +267,48 @@ void ProcessManager::OnSearchWindowClosed() {
 void ProcessManager::SetSearchUrl(const std::string& url) {
   std::lock_guard<std::mutex> lock(mutex_);
   search_url_ = url;
+}
+
+void ProcessManager::SetBookmarksWindow(CefRefPtr<CefWindow> window) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  bookmarks_window_ = window;
+}
+
+void ProcessManager::OnBookmarksWindowClosed() {
+  std::lock_guard<std::mutex> lock(mutex_);
+  bookmarks_window_ = nullptr;
+}
+
+void ProcessManager::ShowBookmarksWindow() {
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (bookmarks_window_) {
+    PositionWindowAtBottom(bookmarks_window_->GetWindowHandle(), 540, 420, 36);
+    bookmarks_window_->Show();
+    bookmarks_window_->Activate();
+    bookmarks_window_->BringToTop();
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [NSApp activateIgnoringOtherApps:YES];
+    });
+  }
+}
+
+void ProcessManager::HideBookmarksWindow() {
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (bookmarks_window_) {
+    bookmarks_window_->Hide();
+  }
+}
+
+void ProcessManager::CloseAllWindows() {
+  std::lock_guard<std::mutex> lock(mutex_);
+  if (search_window_) {
+    search_window_->Close();
+    search_window_ = nullptr;
+  }
+  if (bookmarks_window_) {
+    bookmarks_window_->Close();
+    bookmarks_window_ = nullptr;
+  }
 }
 
 void ProcessManager::ToggleSearchWindow() {

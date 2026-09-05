@@ -60,6 +60,8 @@ class AppBrowserClient : public CefClient,
                        const CefString& url) override;
   void OnTitleChange(CefRefPtr<CefBrowser> browser,
                      const CefString& title) override;
+  void OnFaviconURLChange(CefRefPtr<CefBrowser> browser,
+                          const std::vector<CefString>& icon_urls) override;
 
   // CefContextMenuHandler methods:
   void OnBeforeContextMenu(CefRefPtr<CefBrowser> browser,

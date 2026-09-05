@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>App Browser - 즐겨찾기</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="bookmarks-layout">
+    <!-- Header with Drag Support -->
+    <header class="bookmarks-header">
+      <div class="header-left">
+        <div class="header-icon">
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+          </svg>
+        </div>
+        <h1 class="header-title">즐겨찾기</h1>
+      </div>
+      <div class="header-actions">
+        <button id="btn-add-bookmark" class="btn-action btn-add" title="즐겨찾기 추가">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          <span>추가</span>
+        </button>
+        <button id="btn-close-window" class="btn-action btn-close" title="창 닫기">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Bookmarks Grid -->
+    <main class="bookmarks-body">
+      <div id="bookmark-grid" class="bookmark-grid">
+        <!-- Rendered dynamically via bookmarks.js -->
+      </div>
+    </main>
+
+    <!-- Modal for Add / Edit Bookmark -->
+    <div id="modal-bookmark" class="modal-backdrop" style="display: none;">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 id="modal-bookmark-title" class="modal-title">즐겨찾기 추가</h3>
+          <button id="modal-bookmark-close" class="btn-modal-close" type="button">✕</button>
+        </div>
+        <form id="modal-bookmark-form">
+          <div class="modal-body">
+            <label for="bm-name-input" class="modal-label">이름</label>
+            <input type="text" id="bm-name-input" class="modal-input" placeholder="사이트 이름 (예: Google)" autocomplete="off" required />
+
+            <label for="bm-url-input" class="modal-label">주소 (URL)</label>
+            <input type="text" id="bm-url-input" class="modal-input" placeholder="https://..." autocomplete="off" required />
+
+            <div id="modal-bookmark-error" class="modal-error"></div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" id="modal-bookmark-cancel" class="btn-secondary">취소</button>
+            <button type="submit" id="modal-bookmark-submit" class="btn-primary">저장</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal for Delete Confirmation -->
+    <div id="modal-confirm" class="modal-backdrop" style="display: none;">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 class="modal-title">즐겨찾기 삭제</h3>
+          <button id="modal-confirm-close" class="btn-modal-close" type="button">✕</button>
+        </div>
+        <div class="modal-body">
+          <p id="modal-confirm-msg" class="modal-message">이 즐겨찾기를 삭제하시겠습니까?</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="modal-confirm-cancel" class="btn-secondary">취소</button>
+          <button type="button" id="modal-confirm-ok" class="btn-danger">삭제</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
+  </div>
+
+  <script src="bookmarks.js"></script>
+</body>
+</html>

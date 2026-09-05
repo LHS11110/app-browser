@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const statTotalGroupsEl = document.getElementById('stat-total-groups');
   const lastSyncTimeEl = document.getElementById('last-sync-time');
   const btnOpenSearchEl = document.getElementById('btn-open-search');
+  const btnOpenBookmarksEl = document.getElementById('btn-open-bookmarks');
   const btnAddGroupEl = document.getElementById('btn-add-group');
   const btnKillAllEl = document.getElementById('btn-kill-all');
   const toastEl = document.getElementById('toast-message');
@@ -86,6 +87,16 @@ document.addEventListener('DOMContentLoaded', () => {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
+  }
+
+  function getDomain(urlStr) {
+    try {
+      const u = new URL(urlStr);
+      return u.hostname.replace(/^www\./, '');
+    } catch (e) {
+      if (!urlStr) return '';
+      return urlStr.replace(/^https?:\/\//, '').split('/')[0];
+    }
   }
 
   // Generate a friendly initial process name based on URL/Title
@@ -237,6 +248,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 </li>
               ` : itemsInGroup.map(item => {
               const isEditingThis = (editingPid === item.pid);
+              const domain = getDomain(item.url);
+              const faviconUrl = domain ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64` : '';
 
               return `
                 <li class="process-item" data-pid="${item.pid}" data-group-id="${group.id}">
@@ -251,11 +264,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     ` : `
                       <div class="item-name-box">
                         <div class="item-icon">
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
-                            <line x1="8" y1="21" x2="16" y2="21"></line>
-                            <line x1="12" y1="17" x2="12" y2="21"></line>
-                          </svg>
+                          ${domain ? `
+                            <img class="item-favicon" src="${faviconUrl}" alt="" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" />
+                            <svg style="display: none;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                              <line x1="8" y1="21" x2="16" y2="21"></line>
+                              <line x1="12" y1="17" x2="12" y2="21"></line>
+                            </svg>
+                          ` : `
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                              <line x1="8" y1="21" x2="16" y2="21"></line>
+                              <line x1="12" y1="17" x2="12" y2="21"></line>
+                            </svg>
+                          `}
                         </div>
                         <span class="item-name" data-action="start-rename" data-pid="${item.pid}" title="클릭하여 프로세스명 변경">${escapeHtml(item.name)}</span>
                         <button type="button" class="btn-rename" data-action="start-rename" data-pid="${item.pid}" title="프로세스명 변경">
@@ -716,6 +738,13 @@ document.addEventListener('DOMContentLoaded', () => {
   btnOpenSearchEl.addEventListener('click', () => {
     window.location.href = 'action://open-search';
   });
+
+  // Open Bookmarks Window
+  if (btnOpenBookmarksEl) {
+    btnOpenBookmarksEl.addEventListener('click', () => {
+      window.location.href = 'action://open-bookmarks';
+    });
+  }
 
   // Kill All Processes
   btnKillAllEl.addEventListener('click', () => {

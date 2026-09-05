@@ -10,6 +10,7 @@ struct WindowConfig {
   std::string url = "";
   std::string manager_url = "";
   std::string search_url = "";
+  std::string bookmarks_url = "";
   int width = 0;
   int height = 0;
   int min_width = 300;

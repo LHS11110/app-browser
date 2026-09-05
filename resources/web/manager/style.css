@@ -148,11 +148,16 @@ body {
   color: var(--text-muted);
 }
 
-/* Action Toolbar (3 Buttons) */
+/* Action Toolbar (4 Buttons) */
 .header-toolbar {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: repeat(4, 1fr);
   gap: 6px;
+  padding: 8px;
+  background: #1e293b; /* Solid dark slate - completely opaque */
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
 }
 
 .btn {
@@ -160,7 +165,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 5px;
-  padding: 6px 8px;
+  padding: 7px 8px;
   font-size: 11px;
   font-weight: 600;
   border-radius: 8px;
@@ -180,31 +185,31 @@ body {
 .btn-primary {
   background: linear-gradient(135deg, var(--accent-primary), var(--accent-primary-hover));
   color: #ffffff;
-  box-shadow: 0 3px 10px rgba(99, 102, 241, 0.3);
+  box-shadow: 0 3px 10px rgba(99, 102, 241, 0.4);
 }
 
 .btn-primary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 5px 14px rgba(99, 102, 241, 0.42);
+  box-shadow: 0 5px 14px rgba(99, 102, 241, 0.5);
 }
 
 .btn-secondary {
-  background: rgba(255, 255, 255, 0.07);
-  border-color: rgba(255, 255, 255, 0.12);
-  color: #e2e8f0;
+  background: #334155; /* Solid button background */
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #f8fafc;
 }
 
 .btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(99, 102, 241, 0.4);
+  background: #475569;
+  border-color: rgba(99, 102, 241, 0.5);
   color: #ffffff;
   transform: translateY(-1px);
 }
 
 .btn-danger {
-  background: var(--accent-danger-bg);
-  border-color: rgba(239, 68, 68, 0.25);
-  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.25);
+  border-color: rgba(239, 68, 68, 0.45);
+  color: #fecaca;
 }
 
 .btn-danger:hover {
@@ -532,6 +537,13 @@ body {
 .item-icon svg {
   width: 11px;
   height: 11px;
+}
+
+.item-icon img.item-favicon {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  object-fit: contain;
 }
 
 .item-name {

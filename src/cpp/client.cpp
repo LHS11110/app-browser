@@ -1,11 +1,14 @@
 #include "client.h"
+#include "app.h"
 #include "process_manager.h"
 
 #include <sstream>
 #include <string>
+#include <vector>
 
 #include "include/base/cef_callback.h"
 #include "include/cef_app.h"
+#include "include/cef_image.h"
 #include "include/cef_parser.h"
 #include "include/views/cef_browser_view.h"
 #include "include/views/cef_window.h"
@@ -42,6 +45,37 @@ std::string UrlDecode(const std::string& in) {
   }
   return out;
 }
+
+class FaviconDownloadCallback : public CefDownloadImageCallback {
+ public:
+  explicit FaviconDownloadCallback(CefRefPtr<CefBrowser> browser)
+      : browser_(browser) {}
+
+  void OnDownloadImageFinished(const CefString& image_url,
+                               int http_status_code,
+                               CefRefPtr<CefImage> image) override {
+    if (!image || image->IsEmpty()) return;
+
+    if (auto browser_view = CefBrowserView::GetForBrowser(browser_)) {
+      if (auto window = browser_view->GetWindow()) {
+        window->SetWindowIcon(image);
+        window->SetWindowAppIcon(image);
+      }
+    }
+
+    int w = 0, h = 0;
+    CefRefPtr<CefBinaryValue> png = image->GetAsPNG(1.0f, true, w, h);
+    if (png && png->GetSize() > 0) {
+      std::vector<uint8_t> buffer(png->GetSize());
+      png->GetData(buffer.data(), buffer.size(), 0);
+      SetAppDockIconFromData(buffer.data(), buffer.size());
+    }
+  }
+
+ private:
+  CefRefPtr<CefBrowser> browser_;
+  IMPLEMENT_REFCOUNTING(FaviconDownloadCallback);
+};
 
 }  // namespace
 
@@ -183,6 +217,10 @@ bool AppBrowserClient::OnBeforeBrowse(CefRefPtr<CefBrowser> browser,
       ProcessManager::GetInstance()->TerminateAll();
     } else if (command == "open-search") {
       ProcessManager::GetInstance()->ShowSearchWindow();
+    } else if (command == "open-bookmarks") {
+      ProcessManager::GetInstance()->ShowBookmarksWindow();
+    } else if (command == "close-bookmarks") {
+      ProcessManager::GetInstance()->HideBookmarksWindow();
     } else if (command == "ready") {
       ProcessManager::GetInstance()->SetManagerBrowser(browser);
       ProcessManager::GetInstance()->NotifyManagerUI();
@@ -205,6 +243,9 @@ void AppBrowserClient::OnAddressChange(CefRefPtr<CefBrowser> browser,
   std::string url_str = url.ToString();
   // When navigating away from the local search bar to an external web page
   if (url_str.rfind("http://", 0) == 0 || url_str.rfind("https://", 0) == 0) {
+    if (config_.is_child) {
+      SetAppDockIconForUrl(url_str);
+    }
     if (auto browser_view = CefBrowserView::GetForBrowser(browser)) {
       if (auto window = browser_view->GetWindow()) {
         CefSize current_size = window->GetSize();
@@ -226,6 +267,28 @@ void AppBrowserClient::OnTitleChange(CefRefPtr<CefBrowser> browser,
       window->SetTitle(title);
     }
   }
+}
+
+void AppBrowserClient::OnFaviconURLChange(CefRefPtr<CefBrowser> browser,
+                                         const std::vector<CefString>& icon_urls) {
+  CEF_REQUIRE_UI_THREAD();
+  if (icon_urls.empty()) return;
+
+  // Select the best candidate URL (prefer apple-touch-icon or large png)
+  std::string best_url = icon_urls[0].ToString();
+  for (const auto& url_cef : icon_urls) {
+    std::string candidate = url_cef.ToString();
+    if (candidate.find("apple-touch-icon") != std::string::npos ||
+        candidate.find("192") != std::string::npos ||
+        candidate.find("180") != std::string::npos ||
+        candidate.find("128") != std::string::npos) {
+      best_url = candidate;
+      break;
+    }
+  }
+
+  browser->GetHost()->DownloadImage(best_url, true, 256, false,
+                                    new FaviconDownloadCallback(browser));
 }
 
 void AppBrowserClient::OnBeforeContextMenu(

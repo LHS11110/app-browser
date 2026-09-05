@@ -42,6 +42,15 @@ class ProcessManager {
   int SpawnSearchChild();
   void SetSearchUrl(const std::string& url);
 
+  // Bookmarks Window Management
+  void SetBookmarksWindow(CefRefPtr<CefWindow> window);
+  void OnBookmarksWindowClosed();
+  void ShowBookmarksWindow();
+  void HideBookmarksWindow();
+
+  // Window Clean Shutdown
+  void CloseAllWindows();
+
   // IPC Synchronization
   void InitIpc();
 
@@ -53,6 +62,7 @@ class ProcessManager {
   std::vector<ChildProcessInfo> processes_;
   CefRefPtr<CefBrowser> manager_browser_;
   CefRefPtr<CefWindow> search_window_;
+  CefRefPtr<CefWindow> bookmarks_window_;
   int search_child_pid_ = -1;
   std::string search_url_;
 };

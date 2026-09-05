@@ -2,6 +2,8 @@
 #include "client.h"
 #include "process_manager.h"
 
+#include <dispatch/dispatch.h>
+
 #include "include/base/cef_callback.h"
 #include "include/cef_browser.h"
 #include "include/views/cef_browser_view.h"
@@ -18,12 +20,16 @@ void QuitAppCleanly() {
   if (g_is_quitting) return;
   g_is_quitting = true;
   ProcessManager::GetInstance()->TerminateAll();
+  ProcessManager::GetInstance()->CloseAllWindows();
   if (auto client = AppBrowserClient::GetInstance()) {
     client->CloseAllBrowsers(true);
   }
   CefPostTask(TID_UI, base::BindOnce([]() {
     CefQuitMessageLoop();
   }));
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(400 * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{
+    exit(0);
+  });
 }
 
 namespace {
@@ -33,11 +39,13 @@ class AppBrowserWindowDelegate : public CefWindowDelegate {
   AppBrowserWindowDelegate(CefRefPtr<CefBrowserView> browser_view,
                            const WindowConfig& config,
                            bool is_manager = false,
-                           bool is_search = false)
+                           bool is_search = false,
+                           bool is_bookmarks = false)
       : browser_view_(browser_view),
         config_(config),
         is_manager_(is_manager),
-        is_search_(is_search) {}
+        is_search_(is_search),
+        is_bookmarks_(is_bookmarks) {}
 
   AppBrowserWindowDelegate(const AppBrowserWindowDelegate&) = delete;
   AppBrowserWindowDelegate& operator=(const AppBrowserWindowDelegate&) = delete;
@@ -46,8 +54,12 @@ class AppBrowserWindowDelegate : public CefWindowDelegate {
     window->SetToFillLayout();
     window->AddChildView(browser_view_);
     window->Layout();
-    window->CenterWindow(CefSize(config_.width, config_.height));
-    if (is_search_) {
+    if (is_bookmarks_) {
+      PositionWindowAtBottom(window->GetWindowHandle(), config_.width, config_.height, 36);
+    } else {
+      window->CenterWindow(CefSize(config_.width, config_.height));
+    }
+    if (is_search_ || is_bookmarks_) {
       window->SetBackgroundColor(CefColorSetARGB(0, 0, 0, 0));
       browser_view_->SetBackgroundColor(CefColorSetARGB(0, 0, 0, 0));
     }
@@ -61,11 +73,11 @@ class AppBrowserWindowDelegate : public CefWindowDelegate {
   }
 
   bool IsFrameless(CefRefPtr<CefWindow> window) override {
-    return is_search_;
+    return is_search_ || is_bookmarks_;
   }
 
   bool CanResize(CefRefPtr<CefWindow> window) override {
-    return !is_search_;
+    return !is_search_ && !is_bookmarks_;
   }
 
   void OnWindowDestroyed(CefRefPtr<CefWindow> window) override {
@@ -76,12 +88,22 @@ class AppBrowserWindowDelegate : public CefWindowDelegate {
     if (is_search_) {
       ProcessManager::GetInstance()->OnSearchWindowClosed();
     }
+    if (is_bookmarks_) {
+      ProcessManager::GetInstance()->OnBookmarksWindowClosed();
+    }
   }
 
   bool CanClose(CefRefPtr<CefWindow> window) override {
+    if (g_is_quitting) {
+      return true;
+    }
     if (is_manager_) {
       QuitAppCleanly();
       return true;
+    }
+    if (is_bookmarks_) {
+      window->Hide();
+      return false;
     }
     if (browser_view_) {
       CefRefPtr<CefBrowser> browser = browser_view_->GetBrowser();
@@ -105,6 +127,7 @@ class AppBrowserWindowDelegate : public CefWindowDelegate {
   WindowConfig config_;
   bool is_manager_ = false;
   bool is_search_ = false;
+  bool is_bookmarks_ = false;
 
   IMPLEMENT_REFCOUNTING(AppBrowserWindowDelegate);
 };
@@ -225,6 +248,27 @@ void AppBrowserApp::OnContextInitialized() {
   search_window->SetTitle(search_config.title);
 
   ProcessManager::GetInstance()->SetSearchWindow(search_window);
+
+  // Create Bookmarks Window
+  WindowConfig bookmarks_config;
+  bookmarks_config.title = "App Browser - 즐겨찾기";
+  bookmarks_config.url = config_.bookmarks_url.empty() ? config_.url : config_.bookmarks_url;
+  bookmarks_config.width = 540;
+  bookmarks_config.height = 420;
+  bookmarks_config.min_width = 360;
+  bookmarks_config.min_height = 300;
+  bookmarks_config.is_translucent = true;
+  bookmarks_config.alpha = 1.0f;
+
+  CefRefPtr<CefBrowserView> bookmarks_browser_view = CefBrowserView::CreateBrowserView(
+      client, bookmarks_config.url, transparent_settings, nullptr, nullptr,
+      new AppBrowserViewDelegate());
+
+  CefRefPtr<CefWindow> bookmarks_window = CefWindow::CreateTopLevelWindow(
+      new AppBrowserWindowDelegate(bookmarks_browser_view, bookmarks_config, false, false, true));
+  bookmarks_window->SetTitle(bookmarks_config.title);
+
+  ProcessManager::GetInstance()->SetBookmarksWindow(bookmarks_window);
 
   // Schedule periodic child process liveness checking
   ScheduleProcessLivenessCheck();

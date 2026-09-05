@@ -7,6 +7,9 @@ namespace app_browser {
 
 // Native macOS window helper to set window opacity / translucency
 void SetWindowTranslucent(CefWindowHandle handle, float alpha);
+void PositionWindowAtBottom(CefWindowHandle handle, int width, int height, int bottom_margin = 36);
+void SetAppDockIconForUrl(const std::string& url);
+void SetAppDockIconFromData(const void* data, size_t size);
 void ActivateApplication();
 void QuitAppCleanly();
 

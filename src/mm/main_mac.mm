@@ -152,6 +152,119 @@ void SetWindowTranslucent(CefWindowHandle handle, float alpha) {
   });
 }
 
+void PositionWindowAtBottom(CefWindowHandle handle, int width, int height, int bottom_margin) {
+  if (!handle) return;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    NSView* view = CAST_CEF_WINDOW_HANDLE_TO_NSVIEW(handle);
+    if (!view) return;
+
+    auto applyPosition = ^(NSWindow* window) {
+      if (!window) return;
+      NSScreen* screen = [window screen] ? [window screen] : [NSScreen mainScreen];
+      if (!screen) return;
+      NSRect visibleFrame = [screen visibleFrame];
+      CGFloat x = visibleFrame.origin.x + (visibleFrame.size.width - width) / 2.0;
+      CGFloat y = visibleFrame.origin.y + bottom_margin;
+      [window setFrame:NSMakeRect(x, y, width, height) display:YES animate:NO];
+    };
+
+    NSWindow* window = [view window];
+    if (window) {
+      applyPosition(window);
+    } else {
+      dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(50 * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{
+        applyPosition([view window]);
+      });
+    }
+  });
+}
+
+static NSImage* CreateAppIconFromImage(NSImage* sourceImage) {
+  if (!sourceImage || ![sourceImage isValid]) return nil;
+
+  CGFloat canvasSize = 256.0;
+  NSImage* finalIcon = [[NSImage alloc] initWithSize:NSMakeSize(canvasSize, canvasSize)];
+  [finalIcon lockFocus];
+
+  // Draw smooth rounded squircle background
+  NSRect bgRect = NSMakeRect(8, 8, canvasSize - 16, canvasSize - 16);
+  NSBezierPath* bgPath = [NSBezierPath bezierPathWithRoundedRect:bgRect xRadius:54 yRadius:54];
+
+  // Modern dark gradient
+  NSColor* startColor = [NSColor colorWithCalibratedRed:0.11 green:0.14 blue:0.20 alpha:1.0];
+  NSColor* endColor = [NSColor colorWithCalibratedRed:0.07 green:0.09 blue:0.13 alpha:1.0];
+  NSGradient* gradient = [[NSGradient alloc] initWithStartingColor:startColor endingColor:endColor];
+  [gradient drawInBezierPath:bgPath angle:-45.0];
+
+  // Subtle border
+  [[NSColor colorWithCalibratedWhite:1.0 alpha:0.18] setStroke];
+  [bgPath setLineWidth:2.0];
+  [bgPath stroke];
+
+  // Draw the favicon centered with elegant padding
+  CGFloat iconTargetSize = 156.0;
+  NSRect iconRect = NSMakeRect((canvasSize - iconTargetSize) / 2.0,
+                               (canvasSize - iconTargetSize) / 2.0,
+                               iconTargetSize,
+                               iconTargetSize);
+  [sourceImage drawInRect:iconRect
+                 fromRect:NSZeroRect
+                operation:NSCompositingOperationSourceOver
+                 fraction:1.0];
+
+  [finalIcon unlockFocus];
+  return finalIcon;
+}
+
+static void SetAppDockIcon(NSImage* icon) {
+  if (!icon || ![icon isValid]) return;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    NSImage* appIcon = CreateAppIconFromImage(icon);
+    if (appIcon) {
+      [NSApp setApplicationIconImage:appIcon];
+    }
+  });
+}
+
+void SetAppDockIconFromData(const void* data, size_t size) {
+  if (!data || size == 0) return;
+  NSData* nsData = [NSData dataWithBytes:data length:size];
+  if (!nsData) return;
+  NSImage* image = [[NSImage alloc] initWithData:nsData];
+  if (image && [image isValid]) {
+    SetAppDockIcon(image);
+  }
+}
+
+void SetAppDockIconForUrl(const std::string& url_str) {
+  if (url_str.empty()) return;
+  @autoreleasepool {
+    NSString* pageUrlString = [NSString stringWithUTF8String:url_str.c_str()];
+    if (!pageUrlString) return;
+
+    NSURL* pageUrl = [NSURL URLWithString:pageUrlString];
+    NSString* host = [pageUrl host];
+    if (!host || [host length] == 0) return;
+
+    NSString* faviconServiceUrl = [NSString stringWithFormat:@"https://www.google.com/s2/favicons?domain=%@&sz=128", host];
+    NSURL* downloadUrl = [NSURL URLWithString:faviconServiceUrl];
+
+    NSURLSessionDataTask* task = [[NSURLSession sharedSession]
+        dataTaskWithURL:downloadUrl
+      completionHandler:^(NSData* data, NSURLResponse* response, NSError* error) {
+        if (data && !error && [data length] > 0) {
+          dispatch_async(dispatch_get_main_queue(), ^{
+            NSImage* image = [[NSImage alloc] initWithData:data];
+            if (image && [image isValid]) {
+              SetAppDockIcon(image);
+            }
+          });
+        }
+      }];
+    [task resume];
+  }
+}
+
 void ActivateApplication() {
   dispatch_async(dispatch_get_main_queue(), ^{
     [NSApp activateIgnoringOtherApps:YES];
@@ -184,6 +297,7 @@ int main(int argc, char* argv[]) {
     NSString* resourcePath = [[NSBundle mainBundle] resourcePath];
     NSString* startHtmlPath = [resourcePath stringByAppendingPathComponent:@"web/search/index.html"];
     NSString* managerHtmlPath = [resourcePath stringByAppendingPathComponent:@"web/manager/index.html"];
+    NSString* bookmarksHtmlPath = [resourcePath stringByAppendingPathComponent:@"web/bookmarks/index.html"];
 
     if ([[NSFileManager defaultManager] fileExistsAtPath:startHtmlPath]) {
       config.search_url = std::string("file://") + [startHtmlPath UTF8String];
@@ -195,8 +309,16 @@ int main(int argc, char* argv[]) {
       config.manager_url = std::string("file://") + [managerHtmlPath UTF8String];
     }
 
+    if ([[NSFileManager defaultManager] fileExistsAtPath:bookmarksHtmlPath]) {
+      config.bookmarks_url = std::string("file://") + [bookmarksHtmlPath UTF8String];
+    }
+
     if (config.url.empty()) {
       config.url = config.search_url;
+    }
+
+    if (config.is_child && !config.url.empty()) {
+      app_browser::SetAppDockIconForUrl(config.url);
     }
 
     CefSettings settings;
