@@ -67,3 +67,7 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+
+# CEF dependency
+third_party/
+*.tar.bz2
