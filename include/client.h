@@ -6,6 +6,8 @@
 #include "include/cef_context_menu_handler.h"
 #include "include/cef_request_handler.h"
 
+#include "config.h"
+
 #include <list>
 
 namespace app_browser {
@@ -16,8 +18,10 @@ class AppBrowserClient : public CefClient,
                          public CefContextMenuHandler,
                          public CefRequestHandler {
  public:
-  AppBrowserClient();
+  explicit AppBrowserClient(const WindowConfig& config = WindowConfig());
   ~AppBrowserClient() override;
+
+  const WindowConfig& GetConfig() const { return config_; }
 
   // CefClient methods:
   CefRefPtr<CefLifeSpanHandler> GetLifeSpanHandler() override { return this; }
@@ -76,6 +80,7 @@ class AppBrowserClient : public CefClient,
   BrowserList browser_list_;
 
   bool is_closing_ = false;
+  WindowConfig config_;
 
   IMPLEMENT_REFCOUNTING(AppBrowserClient);
   DISALLOW_COPY_AND_ASSIGN(AppBrowserClient);

@@ -15,6 +15,8 @@ struct WindowConfig {
   int min_width = 300;
   int min_height = 50;
   bool is_child = false;
+  bool is_search = false;
+  int parent_pid = 0;
   bool is_translucent = false;
   float alpha = 1.0f;
 };
@@ -35,9 +37,14 @@ inline WindowConfig ParseConfig(int argc, char* argv[]) {
     const std::string title_prefix = "--title=";
     const std::string width_prefix = "--width=";
     const std::string height_prefix = "--height=";
+    const std::string parent_pid_prefix = "--parent-pid=";
 
     if (arg == "--child") {
       config.is_child = true;
+    } else if (arg == "--search") {
+      config.is_search = true;
+    } else if (arg.rfind(parent_pid_prefix, 0) == 0) {
+      config.parent_pid = std::atoi(arg.substr(parent_pid_prefix.length()).c_str());
     } else if (arg.rfind(url_prefix, 0) == 0) {
       config.url = arg.substr(url_prefix.length());
     } else if (arg.rfind(title_prefix, 0) == 0) {
@@ -51,7 +58,12 @@ inline WindowConfig ParseConfig(int argc, char* argv[]) {
 
   // 3. Set default dimensions if not explicitly provided
   if (config.width <= 0 || config.height <= 0) {
-    if (config.is_child || !config.url.empty()) {
+    if (config.is_search) {
+      config.width = 640;
+      config.height = 64;
+      config.min_width = 300;
+      config.min_height = 50;
+    } else if (config.is_child || !config.url.empty()) {
       // Child or explicit URL: standard browser window
       config.width = 1280;
       config.height = 800;

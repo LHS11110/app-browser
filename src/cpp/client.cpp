@@ -45,7 +45,7 @@ std::string UrlDecode(const std::string& in) {
 
 }  // namespace
 
-AppBrowserClient::AppBrowserClient() {
+AppBrowserClient::AppBrowserClient(const WindowConfig& config) : config_(config) {
   DCHECK(!g_instance);
   g_instance = this;
 }
@@ -163,7 +163,11 @@ bool AppBrowserClient::OnBeforeBrowse(CefRefPtr<CefBrowser> browser,
       }
 
       if (!target_url.empty()) {
-        ProcessManager::GetInstance()->SpawnChild(target_url);
+        if (config_.is_search && config_.parent_pid > 0) {
+          SendSpawnNotificationToParent(config_.parent_pid, target_url);
+        } else {
+          ProcessManager::GetInstance()->SpawnChild(target_url);
+        }
       }
     } else if (command == "kill") {
       std::string pid_str = get_param("pid");

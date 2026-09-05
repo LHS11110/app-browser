@@ -93,6 +93,55 @@
     </footer>
   </div>
 
+  <!-- Group Input Modal (Add / Rename Group) -->
+  <div id="modal-group" class="modal-backdrop" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="modal-group-title" class="modal-title">새 그룹 추가</h3>
+        <button id="modal-group-close" class="btn-modal-close" type="button" aria-label="닫기">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <form id="modal-group-form">
+        <div class="modal-body">
+          <label for="modal-group-input" class="modal-label">그룹 이름</label>
+          <input type="text" id="modal-group-input" class="modal-input" placeholder="그룹 이름을 입력하세요" autocomplete="off" spellcheck="false" />
+          <div id="modal-group-error" class="modal-error"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="modal-group-cancel" class="btn btn-secondary">취소</button>
+          <button type="submit" id="modal-group-submit" class="btn btn-primary">확인</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Confirm Modal (Delete Group) -->
+  <div id="modal-confirm" class="modal-backdrop" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="modal-confirm-title" class="modal-title">그룹 삭제</h3>
+        <button id="modal-confirm-close" class="btn-modal-close" type="button" aria-label="닫기">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p id="modal-confirm-message" class="modal-message">이 그룹을 삭제하시겠습니까?</p>
+        <p class="modal-submessage">그룹 내의 실행 창들은 <strong>기본 그룹</strong>으로 안전하게 이동됩니다.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="modal-confirm-cancel" class="btn btn-secondary">취소</button>
+        <button type="button" id="modal-confirm-ok" class="btn btn-danger">삭제</button>
+      </div>
+    </div>
+  </div>
+
   <script src="manager.js"></script>
 </body>
 </html>

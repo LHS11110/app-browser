@@ -148,46 +148,74 @@ document.addEventListener('DOMContentLoaded', () => {
     statTotalAppsEl.textContent = currentProcesses.length;
     statTotalGroupsEl.textContent = groups.length;
 
-    if (currentProcesses.length === 0) {
-      groupListEl.innerHTML = '';
-      emptyStateEl.style.display = 'flex';
-      return;
+    // Groups are ALWAYS visible regardless of whether there are running processes!
+    if (emptyStateEl) {
+      emptyStateEl.style.display = 'none';
     }
-
-    emptyStateEl.style.display = 'none';
 
     // Map and categorize processes
     const resolvedItems = currentProcesses.map((p, idx) => getProcessInfo(p, idx));
 
     let html = '';
 
+    // If there are 0 processes running in total, show a friendly top notice
+    if (currentProcesses.length === 0) {
+      html += `
+        <div class="empty-process-banner">
+          <div class="banner-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+          </div>
+          <div class="banner-text">
+            <span>실행 중인 창이 없습니다. 상단 <strong>[검색창]</strong>을 눌러 웹 창을 열어보세요.</span>
+          </div>
+        </div>
+      `;
+    }
+
     groups.forEach(group => {
       const itemsInGroup = resolvedItems.filter(p => p.groupId === group.id);
       const isCollapsed = Boolean(group.collapsed);
 
       html += `
-        <div class="group-section ${isCollapsed ? 'collapsed' : ''}" data-group-id="${group.id}">
-          <!-- Group Header -->
-          <div class="group-header" data-action="toggle-group" data-group-id="${group.id}">
-            <div class="group-header-left">
-              <svg class="group-toggle-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="6 9 12 15 18 9"></polyline>
-              </svg>
-              <svg class="group-folder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-              </svg>
-              <span class="group-title" title="더블 클릭하여 이름 변경">${escapeHtml(group.name)}</span>
-              <span class="group-count-badge">${itemsInGroup.length}개</span>
+        <div class="group-folder ${isCollapsed ? 'collapsed' : ''}" data-group-id="${group.id}">
+          <!-- Folder Tab & Header -->
+          <div class="folder-header" data-action="toggle-group" data-group-id="${group.id}">
+            <div class="folder-tab-badge"></div>
+            <div class="folder-header-left">
+              <span class="folder-collapse-arrow">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </span>
+              <div class="folder-icon-box">
+                ${isCollapsed ? `
+                  <!-- Closed Folder Icon -->
+                  <svg class="folder-icon closed" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z"/>
+                  </svg>
+                ` : `
+                  <!-- Open Folder Icon -->
+                  <svg class="folder-icon open" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-1.04 12H5.04l2.16-7h13.76l-1.96 7z"/>
+                  </svg>
+                `}
+              </div>
+              <span class="folder-title" title="더블 클릭하여 폴더명 변경">${escapeHtml(group.name)}</span>
+              <span class="folder-count-badge">${itemsInGroup.length}개</span>
             </div>
-            <div class="group-header-actions" onclick="event.stopPropagation()">
-              <button type="button" class="btn-group-action edit-group" data-action="rename-group" data-group-id="${group.id}" title="그룹명 변경">
+            <div class="folder-header-actions" onclick="event.stopPropagation()">
+              <button type="button" class="btn-folder-action edit-group" data-action="rename-group" data-group-id="${group.id}" title="그룹명 변경">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                   <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                 </svg>
               </button>
               ${group.id !== 'default' ? `
-                <button type="button" class="btn-group-action delete-group" data-action="delete-group" data-group-id="${group.id}" title="그룹 삭제 (프로세스는 기본 그룹으로 이동)">
+                <button type="button" class="btn-folder-action delete-group" data-action="delete-group" data-group-id="${group.id}" title="그룹 삭제 (창은 기본 그룹으로 이동)">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <polyline points="3 6 5 6 21 6"></polyline>
                     <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -197,11 +225,17 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
           </div>
 
-          <!-- Group Items -->
-          <ul class="group-items">
-            ${itemsInGroup.length === 0 ? `
-              <li class="group-empty-hint">이 그룹에 실행 중인 창이 없습니다</li>
-            ` : itemsInGroup.map(item => {
+          <!-- Folder Body & Process Items -->
+          <div class="folder-body">
+            <ul class="folder-items">
+              ${itemsInGroup.length === 0 ? `
+                <li class="folder-empty-hint">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                  </svg>
+                  <span>비어 있는 폴더</span>
+                </li>
+              ` : itemsInGroup.map(item => {
               const isEditingThis = (editingPid === item.pid);
 
               return `
@@ -267,7 +301,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 </li>
               `;
             }).join('')}
-          </ul>
+            </ul>
+          </div>
         </div>
       `;
     });
@@ -312,29 +347,217 @@ document.addEventListener('DOMContentLoaded', () => {
     return false;
   }
 
-  // Create New Group
-  btnAddGroupEl.addEventListener('click', () => {
-    const name = prompt('새 그룹의 이름을 입력하세요:');
-    if (!name) return;
+  // Modal Elements
+  const modalGroupEl = document.getElementById('modal-group');
+  const modalGroupTitleEl = document.getElementById('modal-group-title');
+  const modalGroupCloseEl = document.getElementById('modal-group-close');
+  const modalGroupFormEl = document.getElementById('modal-group-form');
+  const modalGroupInputEl = document.getElementById('modal-group-input');
+  const modalGroupErrorEl = document.getElementById('modal-group-error');
+  const modalGroupCancelEl = document.getElementById('modal-group-cancel');
 
-    const trimmed = name.trim();
-    if (!trimmed) return;
+  const modalConfirmEl = document.getElementById('modal-confirm');
+  const modalConfirmTitleEl = document.getElementById('modal-confirm-title');
+  const modalConfirmCloseEl = document.getElementById('modal-confirm-close');
+  const modalConfirmMessageEl = document.getElementById('modal-confirm-message');
+  const modalConfirmCancelEl = document.getElementById('modal-confirm-cancel');
+  const modalConfirmOkEl = document.getElementById('modal-confirm-ok');
 
-    if (groups.some(g => g.name.toLowerCase() === trimmed.toLowerCase())) {
-      showToast('이미 동일한 이름의 그룹이 존재합니다.');
-      return;
+  let modalGroupState = { mode: 'create', groupId: null };
+  let confirmState = { action: null, payload: null };
+
+  function openGroupModal(mode, groupId = null) {
+    modalGroupState = { mode, groupId };
+    if (modalGroupErrorEl) modalGroupErrorEl.textContent = '';
+
+    if (mode === 'create') {
+      if (modalGroupTitleEl) modalGroupTitleEl.textContent = '새 그룹 추가';
+      if (modalGroupInputEl) modalGroupInputEl.value = '';
+    } else {
+      const group = groups.find(g => g.id === groupId);
+      if (!group) return;
+      if (modalGroupTitleEl) modalGroupTitleEl.textContent = '그룹 이름 변경';
+      if (modalGroupInputEl) modalGroupInputEl.value = group.name;
     }
 
-    const newGroup = {
-      id: 'group_' + Date.now(),
-      name: trimmed,
-      collapsed: false
-    };
+    if (modalGroupEl) {
+      modalGroupEl.style.display = 'flex';
+      setTimeout(() => {
+        if (modalGroupInputEl) {
+          modalGroupInputEl.focus();
+          modalGroupInputEl.select();
+        }
+      }, 50);
+    }
+  }
 
-    groups.push(newGroup);
-    saveGroups(groups);
-    render();
-    showToast(`'${trimmed}' 그룹이 생성되었습니다.`, false);
+  function closeGroupModal() {
+    if (modalGroupEl) modalGroupEl.style.display = 'none';
+    if (modalGroupInputEl) modalGroupInputEl.value = '';
+    if (modalGroupErrorEl) modalGroupErrorEl.textContent = '';
+    modalGroupState = { mode: 'create', groupId: null };
+  }
+
+  function openConfirmDeleteModal(groupId) {
+    if (groupId === 'default') return;
+    const group = groups.find(g => g.id === groupId);
+    if (!group) return;
+
+    confirmState = { action: 'delete-group', payload: groupId };
+    if (modalConfirmTitleEl) modalConfirmTitleEl.textContent = '그룹 삭제';
+    if (modalConfirmMessageEl) {
+      modalConfirmMessageEl.innerHTML = `<strong>'${escapeHtml(group.name)}'</strong> 그룹을 삭제하시겠습니까?`;
+    }
+    const submessage = modalConfirmEl.querySelector('.modal-submessage');
+    if (submessage) {
+      submessage.innerHTML = `그룹 내의 실행 창들은 <strong>기본 그룹</strong>으로 안전하게 이동됩니다.`;
+    }
+    if (modalConfirmEl) {
+      modalConfirmEl.style.display = 'flex';
+    }
+  }
+
+  function openConfirmKillAllModal() {
+    confirmState = { action: 'kill-all', payload: null };
+    if (modalConfirmTitleEl) modalConfirmTitleEl.textContent = '모든 창 종료';
+    if (modalConfirmMessageEl) {
+      modalConfirmMessageEl.innerHTML = `모든 실행 중인 창을 종료하시겠습니까?`;
+    }
+    const submessage = modalConfirmEl.querySelector('.modal-submessage');
+    if (submessage) {
+      submessage.innerHTML = `실행 중인 모든 브라우저 프로세스가 안전하게 닫힙니다.`;
+    }
+    if (modalConfirmEl) {
+      modalConfirmEl.style.display = 'flex';
+    }
+  }
+
+  function closeConfirmModal() {
+    if (modalConfirmEl) modalConfirmEl.style.display = 'none';
+    confirmState = { action: null, payload: null };
+  }
+
+  // Modal Event Listeners
+  if (modalGroupCloseEl) modalGroupCloseEl.addEventListener('click', closeGroupModal);
+  if (modalGroupCancelEl) modalGroupCancelEl.addEventListener('click', closeGroupModal);
+  if (modalGroupEl) {
+    modalGroupEl.addEventListener('click', (e) => {
+      if (e.target === modalGroupEl) closeGroupModal();
+    });
+  }
+
+  if (modalConfirmCloseEl) modalConfirmCloseEl.addEventListener('click', closeConfirmModal);
+  if (modalConfirmCancelEl) modalConfirmCancelEl.addEventListener('click', closeConfirmModal);
+  if (modalConfirmEl) {
+    modalConfirmEl.addEventListener('click', (e) => {
+      if (e.target === modalConfirmEl) closeConfirmModal();
+    });
+  }
+
+  // Handle Group Modal Form Submit
+  if (modalGroupFormEl) {
+    modalGroupFormEl.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const rawName = modalGroupInputEl ? modalGroupInputEl.value : '';
+      const trimmed = rawName.trim();
+
+      if (!trimmed) {
+        if (modalGroupErrorEl) modalGroupErrorEl.textContent = '그룹 이름을 입력하세요.';
+        if (modalGroupInputEl) modalGroupInputEl.focus();
+        return;
+      }
+
+      if (modalGroupState.mode === 'create') {
+        if (groups.some(g => g.name.toLowerCase() === trimmed.toLowerCase())) {
+          if (modalGroupErrorEl) modalGroupErrorEl.textContent = '이미 동일한 이름의 그룹이 존재합니다.';
+          if (modalGroupInputEl) modalGroupInputEl.focus();
+          return;
+        }
+
+        const newGroup = {
+          id: 'group_' + Date.now(),
+          name: trimmed,
+          collapsed: false
+        };
+
+        groups.push(newGroup);
+        saveGroups(groups);
+        closeGroupModal();
+        render();
+        showToast(`'${trimmed}' 그룹이 생성되었습니다.`, false);
+      } else if (modalGroupState.mode === 'rename') {
+        const targetGroupId = modalGroupState.groupId;
+        if (groups.some(g => g.id !== targetGroupId && g.name.toLowerCase() === trimmed.toLowerCase())) {
+          if (modalGroupErrorEl) modalGroupErrorEl.textContent = '이미 동일한 이름의 다른 그룹이 존재합니다.';
+          if (modalGroupInputEl) modalGroupInputEl.focus();
+          return;
+        }
+
+        const group = groups.find(g => g.id === targetGroupId);
+        if (group) {
+          group.name = trimmed;
+          saveGroups(groups);
+          closeGroupModal();
+          render();
+          showToast('그룹명이 변경되었습니다.', false);
+        }
+      }
+    });
+  }
+
+  // Handle Confirm OK (Delete Group or Kill All)
+  if (modalConfirmOkEl) {
+    modalConfirmOkEl.addEventListener('click', () => {
+      if (confirmState.action === 'delete-group') {
+        const targetGroupId = confirmState.payload;
+        if (!targetGroupId || targetGroupId === 'default') {
+          closeConfirmModal();
+          return;
+        }
+
+        const group = groups.find(g => g.id === targetGroupId);
+        if (!group) {
+          closeConfirmModal();
+          return;
+        }
+
+        const deletedName = group.name;
+
+        // Reassign all processes in this group to 'default'
+        Object.keys(processMeta).forEach(pid => {
+          if (processMeta[pid].groupId === targetGroupId) {
+            processMeta[pid].groupId = 'default';
+          }
+        });
+        saveProcessMeta(processMeta);
+
+        groups = groups.filter(g => g.id !== targetGroupId);
+        saveGroups(groups);
+        closeConfirmModal();
+        render();
+        showToast(`'${deletedName}' 그룹이 삭제되었습니다.`, false);
+      } else if (confirmState.action === 'kill-all') {
+        closeConfirmModal();
+        window.location.href = 'action://kill-all';
+        showToast('모든 창을 종료했습니다.', false);
+      }
+    });
+  }
+
+  // ESC Key listener for modals
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      if (modalGroupEl && modalGroupEl.style.display === 'flex') {
+        closeGroupModal();
+      } else if (modalConfirmEl && modalConfirmEl.style.display === 'flex') {
+        closeConfirmModal();
+      }
+    }
+  });
+
+  // Create New Group Button
+  btnAddGroupEl.addEventListener('click', () => {
+    openGroupModal('create');
   });
 
   // Group Header Interaction Delegation
@@ -344,23 +567,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (renameBtn) {
       e.stopPropagation();
       const groupId = renameBtn.getAttribute('data-group-id');
-      const group = groups.find(g => g.id === groupId);
-      if (!group) return;
-
-      const newName = prompt('그룹명을 변경하세요:', group.name);
-      if (!newName) return;
-      const trimmed = newName.trim();
-      if (!trimmed || trimmed === group.name) return;
-
-      if (groups.some(g => g.id !== groupId && g.name.toLowerCase() === trimmed.toLowerCase())) {
-        showToast('이미 동일한 이름의 다른 그룹이 존재합니다.');
-        return;
-      }
-
-      group.name = trimmed;
-      saveGroups(groups);
-      render();
-      showToast('그룹명이 변경되었습니다.', false);
+      openGroupModal('rename', groupId);
       return;
     }
 
@@ -369,25 +576,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (deleteBtn) {
       e.stopPropagation();
       const groupId = deleteBtn.getAttribute('data-group-id');
-      if (groupId === 'default') return;
-
-      const group = groups.find(g => g.id === groupId);
-      if (!group) return;
-
-      if (confirm(`'${group.name}' 그룹을 삭제하시겠습니까?\n그룹에 포함된 창들은 기본 그룹으로 이동됩니다.`)) {
-        // Reassign all processes in this group to 'default'
-        Object.keys(processMeta).forEach(pid => {
-          if (processMeta[pid].groupId === groupId) {
-            processMeta[pid].groupId = 'default';
-          }
-        });
-        saveProcessMeta(processMeta);
-
-        groups = groups.filter(g => g.id !== groupId);
-        saveGroups(groups);
-        render();
-        showToast(`'${group.name}' 그룹이 삭제되었습니다.`, false);
-      }
+      openConfirmDeleteModal(groupId);
       return;
     }
 
@@ -399,10 +588,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (group) {
         group.collapsed = !group.collapsed;
         saveGroups(groups);
-        const section = headerEl.closest('.group-section');
-        if (section) {
-          section.classList.toggle('collapsed', group.collapsed);
-        }
+        render();
       }
       return;
     }
@@ -445,23 +631,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const header = titleEl.closest('.group-header');
     if (!header) return;
     const groupId = header.getAttribute('data-group-id');
-    const group = groups.find(g => g.id === groupId);
-    if (!group) return;
-
-    const newName = prompt('그룹명을 변경하세요:', group.name);
-    if (!newName) return;
-    const trimmed = newName.trim();
-    if (!trimmed || trimmed === group.name) return;
-
-    if (groups.some(g => g.id !== groupId && g.name.toLowerCase() === trimmed.toLowerCase())) {
-      showToast('이미 동일한 이름의 다른 그룹이 존재합니다.');
-      return;
-    }
-
-    group.name = trimmed;
-    saveGroups(groups);
-    render();
-    showToast('그룹명이 변경되었습니다.', false);
+    openGroupModal('rename', groupId);
   });
 
   // Handle Process Name Rename Form Submit
@@ -551,9 +721,7 @@ document.addEventListener('DOMContentLoaded', () => {
       showToast('실행 중인 창이 없습니다.');
       return;
     }
-    if (confirm('모든 실행 중인 창을 종료하시겠습니까?')) {
-      window.location.href = 'action://kill-all';
-    }
+    openConfirmKillAllModal();
   });
 
   // Signal ready to C++ ProcessManager

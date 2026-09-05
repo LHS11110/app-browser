@@ -12,13 +12,32 @@
 
 namespace app_browser {
 
+static bool g_is_quitting = false;
+
+void QuitAppCleanly() {
+  if (g_is_quitting) return;
+  g_is_quitting = true;
+  ProcessManager::GetInstance()->TerminateAll();
+  if (auto client = AppBrowserClient::GetInstance()) {
+    client->CloseAllBrowsers(true);
+  }
+  CefPostTask(TID_UI, base::BindOnce([]() {
+    CefQuitMessageLoop();
+  }));
+}
+
 namespace {
 
 class AppBrowserWindowDelegate : public CefWindowDelegate {
  public:
   AppBrowserWindowDelegate(CefRefPtr<CefBrowserView> browser_view,
-                           const WindowConfig& config)
-      : browser_view_(browser_view), config_(config) {}
+                           const WindowConfig& config,
+                           bool is_manager = false,
+                           bool is_search = false)
+      : browser_view_(browser_view),
+        config_(config),
+        is_manager_(is_manager),
+        is_search_(is_search) {}
 
   AppBrowserWindowDelegate(const AppBrowserWindowDelegate&) = delete;
   AppBrowserWindowDelegate& operator=(const AppBrowserWindowDelegate&) = delete;
@@ -39,9 +58,19 @@ class AppBrowserWindowDelegate : public CefWindowDelegate {
 
   void OnWindowDestroyed(CefRefPtr<CefWindow> window) override {
     browser_view_ = nullptr;
+    if (is_manager_) {
+      QuitAppCleanly();
+    }
+    if (is_search_) {
+      ProcessManager::GetInstance()->OnSearchWindowClosed();
+    }
   }
 
   bool CanClose(CefRefPtr<CefWindow> window) override {
+    if (is_manager_) {
+      QuitAppCleanly();
+      return true;
+    }
     if (browser_view_) {
       CefRefPtr<CefBrowser> browser = browser_view_->GetBrowser();
       if (browser) {
@@ -62,6 +91,8 @@ class AppBrowserWindowDelegate : public CefWindowDelegate {
  private:
   CefRefPtr<CefBrowserView> browser_view_;
   WindowConfig config_;
+  bool is_manager_ = false;
+  bool is_search_ = false;
 
   IMPLEMENT_REFCOUNTING(AppBrowserWindowDelegate);
 };
@@ -99,7 +130,7 @@ void AppBrowserApp::OnContextInitialized() {
 
   CefBrowserSettings browser_settings;
   browser_settings.background_color = CefColorSetARGB(255, 255, 255, 255);
-  CefRefPtr<AppBrowserClient> client(new AppBrowserClient());
+  CefRefPtr<AppBrowserClient> client(new AppBrowserClient(config_));
 
   // 1. Child Browser Process Mode
   if (config_.is_child) {
@@ -113,7 +144,32 @@ void AppBrowserApp::OnContextInitialized() {
     return;
   }
 
-  // 2. Parent Process Mode:
+  // 2. Child Search Bar Process Mode
+  if (config_.is_search) {
+    WindowConfig search_config = config_;
+    search_config.title = "App Browser - 검색";
+    search_config.width = 640;
+    search_config.height = 64;
+    search_config.min_width = 300;
+    search_config.min_height = 50;
+    search_config.is_translucent = true;
+    search_config.alpha = 0.96f;
+
+    CefRefPtr<CefBrowserView> search_browser_view = CefBrowserView::CreateBrowserView(
+        client, search_config.url, browser_settings, nullptr, nullptr,
+        new AppBrowserViewDelegate());
+
+    CefRefPtr<CefWindow> window = CefWindow::CreateTopLevelWindow(
+        new AppBrowserWindowDelegate(search_browser_view, search_config, false, true));
+    window->SetTitle(search_config.title);
+    return;
+  }
+
+  // 3. Parent Process Mode:
+  // Initialize IPC listener for child search processes
+  ProcessManager::GetInstance()->InitIpc();
+  ProcessManager::GetInstance()->SetSearchUrl(config_.search_url);
+
   // Create Process Manager Dashboard Window
   WindowConfig manager_config;
   manager_config.title = "App Browser - 프로세스 관리자";
@@ -130,7 +186,7 @@ void AppBrowserApp::OnContextInitialized() {
       new AppBrowserViewDelegate());
 
   CefRefPtr<CefWindow> manager_window = CefWindow::CreateTopLevelWindow(
-      new AppBrowserWindowDelegate(manager_browser_view, manager_config));
+      new AppBrowserWindowDelegate(manager_browser_view, manager_config, true, false));
   manager_window->SetTitle(manager_config.title);
 
   // Create Search Bar Window
@@ -149,7 +205,7 @@ void AppBrowserApp::OnContextInitialized() {
       new AppBrowserViewDelegate());
 
   CefRefPtr<CefWindow> search_window = CefWindow::CreateTopLevelWindow(
-      new AppBrowserWindowDelegate(search_browser_view, search_config));
+      new AppBrowserWindowDelegate(search_browser_view, search_config, false, true));
   search_window->SetTitle(search_config.title);
 
   ProcessManager::GetInstance()->SetSearchWindow(search_window);

@@ -151,6 +151,20 @@ void ProcessManager::TerminateAll() {
       kill(proc.pid, SIGTERM);
     }
     processes_.clear();
+
+    if (search_child_pid_ > 0) {
+      kill(search_child_pid_, SIGTERM);
+      search_child_pid_ = -1;
+    }
+
+    if (g_activeTasks) {
+      for (NSTask* t in g_activeTasks) {
+        if ([t isRunning]) {
+          [t terminate];
+        }
+      }
+      [g_activeTasks removeAllObjects];
+    }
   }
 
   NotifyManagerUI();
@@ -179,6 +193,10 @@ void ProcessManager::RefreshProcesses() {
       } else {
         ++it;
       }
+    }
+
+    if (search_child_pid_ > 0 && kill(search_child_pid_, 0) != 0) {
+      search_child_pid_ = -1;
     }
 
     if (g_activeTasks) {
@@ -236,10 +254,22 @@ void ProcessManager::NotifyManagerUI() {
 }
 
 void ProcessManager::SetSearchWindow(CefRefPtr<CefWindow> window) {
+  std::lock_guard<std::mutex> lock(mutex_);
   search_window_ = window;
 }
 
+void ProcessManager::OnSearchWindowClosed() {
+  std::lock_guard<std::mutex> lock(mutex_);
+  search_window_ = nullptr;
+}
+
+void ProcessManager::SetSearchUrl(const std::string& url) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  search_url_ = url;
+}
+
 void ProcessManager::ToggleSearchWindow() {
+  std::lock_guard<std::mutex> lock(mutex_);
   if (!search_window_)
     return;
 
@@ -251,12 +281,122 @@ void ProcessManager::ToggleSearchWindow() {
   }
 }
 
-void ProcessManager::ShowSearchWindow() {
-  if (!search_window_)
-    return;
+int ProcessManager::SpawnSearchChild() {
+  @autoreleasepool {
+    if (!g_activeTasks) {
+      g_activeTasks = [[NSMutableArray alloc] init];
+    }
 
-  search_window_->Show();
-  search_window_->Activate();
+    NSURL* executableURL = [[NSBundle mainBundle] executableURL];
+    if (!executableURL) {
+      return -1;
+    }
+
+    std::string s_url = search_url_;
+    if (s_url.empty()) {
+      NSString* resourcePath = [[NSBundle mainBundle] resourcePath];
+      NSString* startHtmlPath = [resourcePath stringByAppendingPathComponent:@"web/search/index.html"];
+      s_url = std::string("file://") + [startHtmlPath UTF8String];
+    }
+
+    NSString* urlNs = [NSString stringWithUTF8String:s_url.c_str()];
+    if (!urlNs) {
+      urlNs = [NSString stringWithCString:s_url.c_str() encoding:NSISOLatin1StringEncoding];
+    }
+    NSString* urlArg = [NSString stringWithFormat:@"--url=%@", urlNs];
+    NSString* parentPidArg = [NSString stringWithFormat:@"--parent-pid=%d", getpid()];
+    NSArray<NSString*>* arguments = @[@"--search", urlArg, parentPidArg];
+
+    NSTask* task = [[NSTask alloc] init];
+    [task setExecutableURL:executableURL];
+    [task setArguments:arguments];
+
+    NSURL* bundleURL = [[NSBundle mainBundle] bundleURL];
+    if (bundleURL) {
+      [task setCurrentDirectoryURL:bundleURL];
+    }
+
+    NSError* error = nil;
+    BOOL success = [task launchAndReturnError:&error];
+    if (!success || error) {
+      NSLog(@"Failed to spawn child search process: %@", error);
+      return -1;
+    }
+
+    pid_t pid = [task processIdentifier];
+    if (pid <= 0) {
+      return -1;
+    }
+
+    [g_activeTasks addObject:task];
+    search_child_pid_ = static_cast<int>(pid);
+
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(400 * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{
+      NSRunningApplication* childApp =
+          [NSRunningApplication runningApplicationWithProcessIdentifier:pid];
+      if (childApp) {
+        [childApp activateWithOptions:NSApplicationActivateIgnoringOtherApps];
+      }
+    });
+
+    return search_child_pid_;
+  }
+}
+
+void ProcessManager::ShowSearchWindow() {
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (search_window_) {
+      search_window_->Show();
+      search_window_->Activate();
+      search_window_->BringToTop();
+      dispatch_async(dispatch_get_main_queue(), ^{
+        [NSApp activateIgnoringOtherApps:YES];
+      });
+      return;
+    }
+
+    if (search_child_pid_ > 0 && kill(search_child_pid_, 0) == 0) {
+      FocusChild(search_child_pid_);
+      return;
+    }
+  }
+
+  // If search window was closed, spawn a new process for it!
+  SpawnSearchChild();
+}
+
+void ProcessManager::InitIpc() {
+  @autoreleasepool {
+    pid_t currentPid = getpid();
+    NSString* notifName = [NSString stringWithFormat:@"AppBrowser_Spawn_%d", currentPid];
+    [[NSDistributedNotificationCenter defaultCenter]
+        addObserverForName:notifName
+                    object:nil
+                     queue:[NSOperationQueue mainQueue]
+                usingBlock:^(NSNotification* note) {
+                  NSString* urlStr = note.userInfo[@"url"];
+                  if (urlStr && [urlStr length] > 0) {
+                    ProcessManager::GetInstance()->SpawnChild([urlStr UTF8String]);
+                  }
+                }];
+  }
+}
+
+void SendSpawnNotificationToParent(int parent_pid, const std::string& target_url) {
+  @autoreleasepool {
+    NSString* notifName = [NSString stringWithFormat:@"AppBrowser_Spawn_%d", parent_pid];
+    NSString* urlNs = [NSString stringWithUTF8String:target_url.c_str()];
+    if (!urlNs) {
+      urlNs = [NSString stringWithCString:target_url.c_str() encoding:NSISOLatin1StringEncoding];
+    }
+    NSDictionary* userInfo = @{@"url": urlNs ? urlNs : @""};
+    [[NSDistributedNotificationCenter defaultCenter]
+        postNotificationName:notifName
+                      object:nil
+                    userInfo:userInfo
+          deliverImmediately:YES];
+  }
 }
 
 }  // namespace app_browser

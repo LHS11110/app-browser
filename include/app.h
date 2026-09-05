@@ -8,6 +8,7 @@ namespace app_browser {
 // Native macOS window helper to set window opacity / translucency
 void SetWindowTranslucent(CefWindowHandle handle, float alpha);
 void ActivateApplication();
+void QuitAppCleanly();
 
 class AppBrowserApp : public CefApp, public CefBrowserProcessHandler {
  public:

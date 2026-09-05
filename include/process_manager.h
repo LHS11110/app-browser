@@ -34,10 +34,16 @@ class ProcessManager {
   void SetManagerBrowser(CefRefPtr<CefBrowser> browser);
   void NotifyManagerUI();
 
-  // Search Window Management
+  // Search Window & Process Management
   void SetSearchWindow(CefRefPtr<CefWindow> window);
+  void OnSearchWindowClosed();
   void ToggleSearchWindow();
   void ShowSearchWindow();
+  int SpawnSearchChild();
+  void SetSearchUrl(const std::string& url);
+
+  // IPC Synchronization
+  void InitIpc();
 
  private:
   ProcessManager();
@@ -47,6 +53,10 @@ class ProcessManager {
   std::vector<ChildProcessInfo> processes_;
   CefRefPtr<CefBrowser> manager_browser_;
   CefRefPtr<CefWindow> search_window_;
+  int search_child_pid_ = -1;
+  std::string search_url_;
 };
+
+void SendSpawnNotificationToParent(int parent_pid, const std::string& target_url);
 
 }  // namespace app_browser

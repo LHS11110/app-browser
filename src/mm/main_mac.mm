@@ -8,6 +8,7 @@
 #include "app.h"
 #include "client.h"
 #include "config.h"
+#include "process_manager.h"
 
 #if defined(CEF_USE_SANDBOX)
 #include "include/cef_sandbox_mac.h"
@@ -107,10 +108,7 @@
 }
 
 - (void)tryToTerminateApplication:(NSApplication*)app {
-  app_browser::AppBrowserClient* client = app_browser::AppBrowserClient::GetInstance();
-  if (client && !client->IsClosing()) {
-    client->CloseAllBrowsers(false);
-  }
+  app_browser::QuitAppCleanly();
 }
 
 - (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication*)sender {
@@ -204,7 +202,7 @@ int main(int argc, char* argv[]) {
                                                attributes:nil
                                                     error:nil];
 
-    if (config.is_child) {
+    if (config.is_child || config.is_search) {
       // Isolate cache path for each child process in separate sibling directory
       NSString* childCacheDir = [appDataDir stringByAppendingPathComponent:
           [NSString stringWithFormat:@"Child_%d", getpid()]];
