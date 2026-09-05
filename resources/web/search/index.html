@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>App Browser - 검색</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="background-glow glow-1"></div>
+  <div class="background-glow glow-2"></div>
+
+  <main class="container">
+    <form id="search-form" class="search-box" autocomplete="off">
+      <div class="search-icon-wrapper">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+      </div>
+
+      <input
+        type="text"
+        id="search-input"
+        class="search-input"
+        placeholder="검색어 또는 URL 입력..."
+        autofocus
+        spellcheck="false"
+      />
+    </form>
+  </main>
+
+  <script src="search.js"></script>
+</body>
+</html>

@@ -21,6 +21,8 @@ if(NOT EXISTS "${CEF_ROOT}/cmake/FindCEF.cmake")
 endif()
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CEF_ROOT}/cmake")
+# Disable sandbox for local development to prevent unsigned Mach bootstrap aborts on macOS
+set(USE_SANDBOX OFF CACHE BOOL "Enable or disable use of the sandbox." FORCE)
 find_package(CEF REQUIRED)
 
 # Build libcef_dll_wrapper
@@ -45,6 +47,7 @@ set(APP_HEADERS
   include/app.h
   include/client.h
   include/config.h
+  include/process_manager.h
 )
 
 # C++ source files (.cpp)
@@ -56,6 +59,7 @@ set(APP_CPP_SOURCES
 # Objective-C++ source files (.mm)
 set(APP_MM_SOURCES
   src/mm/main_mac.mm
+  src/mm/process_manager.mm
 )
 
 # Helper sub-process C++ source files (.cpp)
@@ -115,15 +119,17 @@ if(OS_MAC)
   COPY_MAC_FRAMEWORK("${CEF_TARGET}" "${CEF_BINARY_DIR}" "${CEF_APP}")
 
   # Satisfy CEF binary distribution licensing conditions: copy CEF license and credits into Resources
-  add_custom_command(
-    TARGET ${CEF_TARGET}
-    POST_BUILD
+  file(GLOB_RECURSE WEB_RESOURCE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/resources/web/*")
+  add_custom_target(copy_app_resources ALL
     COMMAND ${CMAKE_COMMAND} -E make_directory "${CEF_APP}/Contents/Resources"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CEF_ROOT}/LICENSE.txt" "${CEF_APP}/Contents/Resources/CEF_LICENSE.txt"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CEF_ROOT}/CREDITS.html" "${CEF_APP}/Contents/Resources/CEF_CREDITS.html"
-    COMMENT "Copying CEF license and credits to ${CEF_APP}/Contents/Resources"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/resources/web" "${CEF_APP}/Contents/Resources/web"
+    DEPENDS ${WEB_RESOURCE_FILES}
+    COMMENT "Copying CEF license, credits, and web resources to ${CEF_APP}/Contents/Resources"
     VERBATIM
   )
+  add_dependencies(${CEF_TARGET} copy_app_resources)
 
   # Create Helper targets (Main helper, GPU, Plugin, Renderer)
   foreach(_suffix_list ${CEF_HELPER_APP_SUFFIXES})

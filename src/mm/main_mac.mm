@@ -124,6 +124,27 @@
 
 @end
 
+namespace app_browser {
+void SetWindowTranslucent(CefWindowHandle handle, float alpha) {
+  if (!handle) return;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    NSView* view = CAST_CEF_WINDOW_HANDLE_TO_NSVIEW(handle);
+    if (!view) return;
+    NSWindow* window = [view window];
+    if (window) {
+      [window setAlphaValue:alpha];
+      [window setHasShadow:YES];
+    }
+  });
+}
+
+void ActivateApplication() {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [NSApp activateIgnoringOtherApps:YES];
+  });
+}
+}  // namespace app_browser
+
 int main(int argc, char* argv[]) {
   CefScopedLibraryLoader library_loader;
   if (!library_loader.LoadInMain()) {
@@ -137,14 +158,44 @@ int main(int argc, char* argv[]) {
     [AppBrowserApplication sharedApplication];
     CHECK([NSApp isKindOfClass:[AppBrowserApplication class]]);
 
+    // Ensure the application is registered as a regular GUI application with macOS WindowServer
+    [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
+    [NSApp activateIgnoringOtherApps:YES];
+
+    AppBrowserAppDelegate* delegate = [[AppBrowserAppDelegate alloc] init];
+    [NSApp setDelegate:delegate];
+
     app_browser::WindowConfig config = app_browser::ParseConfig(argc, argv);
 
-    CefSettings settings;
-#if !defined(CEF_USE_SANDBOX)
-    settings.no_sandbox = true;
-#endif
+    NSString* resourcePath = [[NSBundle mainBundle] resourcePath];
+    NSString* startHtmlPath = [resourcePath stringByAppendingPathComponent:@"web/search/index.html"];
+    NSString* managerHtmlPath = [resourcePath stringByAppendingPathComponent:@"web/manager/index.html"];
 
-    // Set cache directories in ~/Library/Application Support/AppBrowser for session & cookie persistence
+    if ([[NSFileManager defaultManager] fileExistsAtPath:startHtmlPath]) {
+      config.search_url = std::string("file://") + [startHtmlPath UTF8String];
+    } else {
+      config.search_url = "https://www.google.com";
+    }
+
+    if ([[NSFileManager defaultManager] fileExistsAtPath:managerHtmlPath]) {
+      config.manager_url = std::string("file://") + [managerHtmlPath UTF8String];
+    }
+
+    if (config.url.empty()) {
+      config.url = config.search_url;
+    }
+
+    CefSettings settings;
+    settings.no_sandbox = true;
+
+    // Explicitly configure browser_subprocess_path for helper processes
+    NSString* helperPath = [[[NSBundle mainBundle] bundlePath]
+        stringByAppendingPathComponent:@"Contents/Frameworks/AppBrowser Helper.app/Contents/MacOS/AppBrowser Helper"];
+    if ([[NSFileManager defaultManager] fileExistsAtPath:helperPath]) {
+      CefString(&settings.browser_subprocess_path) = [helperPath UTF8String];
+    }
+
+    // Set cache directories in ~/Library/Application Support/AppBrowser
     NSString* appSupport = [NSSearchPathForDirectoriesInDomains(
         NSApplicationSupportDirectory, NSUserDomainMask, YES) firstObject];
     NSString* appDataDir = [appSupport stringByAppendingPathComponent:@"AppBrowser"];
@@ -153,8 +204,26 @@ int main(int argc, char* argv[]) {
                                                attributes:nil
                                                     error:nil];
 
-    CefString(&settings.root_cache_path) = [appDataDir UTF8String];
-    CefString(&settings.cache_path) = [[appDataDir stringByAppendingPathComponent:@"Cache"] UTF8String];
+    if (config.is_child) {
+      // Isolate cache path for each child process in separate sibling directory
+      NSString* childCacheDir = [appDataDir stringByAppendingPathComponent:
+          [NSString stringWithFormat:@"Child_%d", getpid()]];
+      [[NSFileManager defaultManager] createDirectoryAtPath:childCacheDir
+                                withIntermediateDirectories:YES
+                                                 attributes:nil
+                                                      error:nil];
+      CefString(&settings.root_cache_path) = [childCacheDir UTF8String];
+      CefString(&settings.cache_path) = [childCacheDir UTF8String];
+    } else {
+      NSString* parentCacheDir = [appDataDir stringByAppendingPathComponent:@"Parent"];
+      [[NSFileManager defaultManager] createDirectoryAtPath:parentCacheDir
+                                withIntermediateDirectories:YES
+                                                 attributes:nil
+                                                      error:nil];
+      CefString(&settings.root_cache_path) = [parentCacheDir UTF8String];
+      CefString(&settings.cache_path) = [parentCacheDir UTF8String];
+    }
+
     settings.log_severity = LOGSEVERITY_WARNING;
 
     CefRefPtr<app_browser::AppBrowserApp> app(new app_browser::AppBrowserApp(config));
@@ -162,9 +231,6 @@ int main(int argc, char* argv[]) {
     if (!CefInitialize(main_args, settings, app.get(), nullptr)) {
       return CefGetExitCode();
     }
-
-    AppBrowserAppDelegate* delegate = [[AppBrowserAppDelegate alloc] init];
-    [NSApp setDelegate:delegate];
 
     // Run CEF event message loop
     CefRunMessageLoop();

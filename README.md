@@ -1,25 +1,32 @@
 # App Browser
 
-Chromium Embedded Framework (CEF) 기반의 **C++ 미니멀 앱 브라우저 (Site-Specific Browser / SSB)**입니다.
+Chromium Embedded Framework (CEF) 기반의 **격리형 멀티 프로세스 앱 브라우저 (Multi-Process Site-Specific Browser)**입니다.
 
-기존 웹 브라우저의 번잡한 주소 표시줄, 탭 바, 북마크 바, 내비게이션 버튼 등 불필요한 UI 요소를 모두 제거하고, 웹 앱을 전용 데스크톱 네이티브 앱처럼 실행할 수 있도록 제작되었습니다.
+부모 프로세스가 **프로세스 관리 센터(대시보드)**와 **검색창**을 총괄 관리하며, 검색창이나 URL 입력 시 각 웹 앱을 **독립된 자식 프로세스(Child Process) 및 독립 창**으로 분리 실행하여 완벽한 격리와 쾌적한 데스크톱 앱 경험을 제공합니다.
 
 ---
 
 ## 주요 특징
 
-- **미니멀 데스크톱 앱 인터페이스**:
-  - 주소창, 툴바, 불필요한 브라우저 UI 없이 전체 화면을 웹 앱 뷰로 꽉 채움
-  - 창 이동 및 크기 조절이 용이한 macOS 네이티브 윈도우 지원
-- **웹 앱 최적화 동작**:
-  - 웹 페이지의 `<title>` 변경 시 네이티브 창 타이틀 자동 동기화 (`CefDisplayHandler`)
+- **부모-자식 멀티 프로세스 격리 아키텍처**:
+  - **부모 프로세스 (Process Manager)**: 전체 앱 생명주기 및 실행 중인 자식 프로세스 모니터링/제어 담당
+  - **독립 자식 프로세스 (Child Browser)**: 각 웹 사이트/웹 앱이 완전히 독립된 OS 프로세스(`AppBrowser --child --url=...`) 및 창으로 기동되어 충돌이나 메모리 간섭이 원천 차단됨
+- **HTML/CSS/JS 기반 프로세스 관리 센터 (대시보드)**:
+  - 실행 중인 자식 앱의 실시간 목록(PID, 사이트명, URL, 시작 시각, 상태) 확인
+  - 각 자식 프로세스를 앞으로 가져오는 **[↗️ 활성화]** 기능
+  - 비정상 동작 또는 불필요한 앱을 즉시 종료하는 **[🛑 개별 종료]** 및 **[전체 종료]** 지원
+  - 검색창을 즉시 띄우는 **[🔍 검색창 열기]** 및 대시보드 내 **[⚡️ 빠른 URL 실행]** 제공
+- **미니멀 플로팅 검색창**:
+  - Spotlight / Raycast 스타일의 컴팩트한 검색창(`640 × 64`)
+  - 검색어 또는 URL 입력 후 `Enter` 시 부모 프로세스가 새로운 자식 창을 생성하고, 검색창은 즉시 다음 검색을 위해 초기화됨
+- **웹 앱 최적화 네이티브 동작**:
+  - 주소창, 툴바 등 불필요한 크롬 요소를 제거하여 웹 앱 본연의 뷰로 화면을 꽉 채움
+  - 웹 페이지 `<title>` 변경 시 네이티브 창 타이틀 자동 동기화 (`CefDisplayHandler`)
   - 새 창(팝업 / `target="_blank"`) 클릭 시 현재 창 내부 탐색으로 유지하여 데스크톱 앱 경험 보장 (`CefLifeSpanHandler`)
-  - 웹 페이지 소스 보기, 검사 등 불필요한 브라우저 메뉴를 정리하고 필수 편집 기능(복사/붙여넣기/잘라내기/전체선택)만 제공 (`CefContextMenuHandler`)
   - macOS 표준 단축키(`Cmd+C`, `Cmd+V`, `Cmd+X`, `Cmd+A`, `Cmd+Q`) 기본 지원
 - **유연한 타겟 URL 설정**:
-  - 커맨드라인 인자(`--url=...`, `--title=...`, `--width=...`, `--height=...`)
+  - 커맨드라인 인자(`--url=...`, `--title=...`, `--width=...`, `--height=...`, `--child`)
   - 환경 변수(`APP_BROWSER_URL=...`)
-  - 기본 설정([include/config.h](include/config.h))
 
 ---
 
@@ -54,66 +61,74 @@ cmake --build build -j$(sysctl -n hw.ncpu)
 
 ## 실행 방법
 
-### 기본 실행
+### 기본 실행 (프로세스 관리 센터 + 검색창 동시 실행)
 ```bash
 open build/Release/AppBrowser.app
 ```
+실행 시 화면에 **프로세스 관리 창(`440 × 740`, 세로형 리스트 및 반투명 글래스 스타일)**과 플로팅 **검색창(`640 × 64`)**이 동시에 표시됩니다.
+- 검색창에 `github.com` 또는 `apple` 같은 검색어를 입력하고 `Enter`를 누르면 새로운 독립 자식 창이 열립니다.
+- 프로세스 관리 센터에서 방금 뜬 앱의 PID와 상태를 확인하고 포커스하거나 종료할 수 있습니다.
 
-### 원하는 웹 앱 URL로 직접 실행
-터미널에서 실행 바이너리에 직접 인자를 전달하여 원하는 웹 앱을 앱 형태로 바로 띄울 수 있습니다:
-
+### 특정 웹 앱을 단독 자식 창으로 직접 실행
 ```bash
 # Notion 실행 예시
-./build/Release/AppBrowser.app/Contents/MacOS/AppBrowser --url="https://www.notion.so" --title="Notion"
+./build/Release/AppBrowser.app/Contents/MacOS/AppBrowser --child --url="https://www.notion.so" --title="Notion"
 
 # YouTube Music 실행 예시
-./build/Release/AppBrowser.app/Contents/MacOS/AppBrowser --url="https://music.youtube.com" --title="YouTube Music" --width=1440 --height=900
-
-# 로컬 개발 서버(Next.js, Vite 등) 실행 예시
-./build/Release/AppBrowser.app/Contents/MacOS/AppBrowser --url="http://localhost:3000" --title="My Local Web App"
-```
-
-### 환경 변수를 통한 실행
-```bash
-APP_BROWSER_URL="https://linear.app" open build/Release/AppBrowser.app
+./build/Release/AppBrowser.app/Contents/MacOS/AppBrowser --child --url="https://music.youtube.com" --title="YouTube Music"
 ```
 
 ---
 
 ## 프로젝트 구조
 
-프로젝트 소스는 역할과 언어 특성에 따라 **헤더 파일(`include/`)**, **순수 C++ 구현체(`src/cpp/`)**, **Objective-C++ 구현체(`src/mm/`)**로 명확히 구분되어 있습니다.
+프로젝트 소스는 역할과 언어 특성에 따라 **헤더 파일(`include/`)**, **순수 C++ 구현체(`src/cpp/`)**, **Objective-C++ 구현체(`src/mm/`)**, **웹 대시보드 리소스(`resources/web/`)**로 명확히 구분되어 있습니다.
 
 ```
 app-browser/
-├── CMakeLists.txt              # 프로젝트 메인 CMake 빌드 설정 (타겟 분리, 라이선스 번들링 포함)
+├── CMakeLists.txt              # 프로젝트 메인 CMake 빌드 설정 (타겟 분리, 리소스/라이선스 번들링)
 ├── LICENSE                     # 본 프로젝트 라이선스(MIT) 및 서드파티(CEF/Chromium) 라이선스 전문
 ├── README.md                   # 문서
 ├── scripts/
 │   └── setup_cef.sh            # CEF 바이너리 자동 다운로드/추출 스크립트
 ├── resources/
-│   └── mac/
-│       ├── Info.plist.in       # 메인 앱 번들 메타데이터 템플릿
-│       └── helper-Info.plist.in # CEF Helper 프로세스 번들 메타데이터 템플릿
+│   ├── mac/
+│   │   ├── Info.plist.in       # 메인 앱 번들 메타데이터 템플릿
+│   │   └── helper-Info.plist.in # CEF Helper 프로세스 번들 메타데이터 템플릿
+│   └── web/                    # [자체 관리 웹 리소스]
+│       ├── search/             # [검색창 웹 리소스 (HTML/CSS/JS 분리)]
+│       │   ├── index.html      # 컴팩트 검색창 마크업
+│       │   ├── style.css       # 미니멀 플로팅 옴니바 스타일
+│       │   └── search.js       # 부모 프로세스에 자식 프로세스 기동 요청 (action://spawn)
+│       └── manager/            # [프로세스 관리 창 웹 리소스 (HTML/CSS/JS 분리)]
+│           ├── index.html      # 프로세스 리스트 뷰 마크업
+│           ├── style.css       # 리스트 형태 다크 테마 대시보드 스타일
+│           └── manager.js      # 실시간 프로세스 목록 갱신 및 제어 스크립트
 ├── include/                    # [헤더 파일] 공용 선언 및 데이터 구조 (.h)
 │   ├── app.h                   # CefApp 및 CefBrowserProcessHandler 인터페이스 선언
-│   ├── client.h                # CefClient 및 생명주기/디스플레이/메뉴 핸들러 선언
-│   └── config.h                # 시작 URL, 창 크기 등 설정 파서 인라인 헤더
+│   ├── client.h                # CefClient 및 핸들러 인터페이스 선언
+│   ├── config.h                # 설정 구조체, 자식 모드 플래그 및 파서
+│   └── process_manager.h       # 자식 프로세스 수명주기/모니터링 관리자 선언
 ├── src/
 │   ├── cpp/                    # [C++ 구현 파일] 순수 C++ 로직 (.cpp)
-│   │   ├── app.cpp             # CEF Views 기반 브라우저 뷰 및 탑레벨 윈도우 생성 로직
-│   │   ├── client.cpp          # 타이틀 동기화, 팝업 제어, 컨텍스트 메뉴 동작 구현
+│   │   ├── app.cpp             # 부모(관리창+검색창) 및 자식 브라우저 뷰/창 생성 로직
+│   │   ├── client.cpp          # action:// 프로토콜 가로채기 및 타이틀/팝업 제어
 │   │   └── helper_mac.cpp      # CEF 보조 프로세스(렌더러, GPU, 플러그인 등) 진입점
 │   └── mm/                     # [Objective-C++ 구현 파일] macOS 네이티브 연동 (.mm)
-│       └── main_mac.mm         # Cocoa NSApplication, NSMenu, 앱 수명주기 및 CEF 메인 진입점
+│       ├── main_mac.mm         # Cocoa 앱 수명주기, 캐시 격리, 서브프로세스 경로 설정
+│       └── process_manager.mm  # NSTask 기반 자식 프로세스 생성/종료 및 NSRunningApplication 활성화
 └── third_party/
     └── cef/                    # CEF 프레임워크 및 바이너리 배포본 (자동 설치됨)
 ```
 
 ### 구성 분리 원칙
+- **`resources/web/` (자체 웹 리소스)**:
+  - **`search/` (검색창)**: 검색창 마크업, 스타일, 스크립트(`index.html`, `style.css`, `search.js`)가 전용 디렉토리로 완전 격리되어 관리됩니다.
+  - **`manager/` (프로세스 관리 창)**: 자식 프로세스를 리스트 형태로 관리하는 전용 대시보드(`index.html`, `style.css`, `manager.js`)로 완전 분리되어 독립적으로 확장 가능합니다.
+  - 외부 번들러나 웹팩 없이 브라우저 표준 기술(Vanilla HTML/CSS/JS)로 작성되어 가볍고 빠르며, 빌드 시 앱 번들의 `Contents/Resources/web/`로 자동 패키징됩니다.
 - **`include/` (헤더 파일)**: 클래스 선언, 인터페이스, 설정 구조체를 정의하며 컴파일러 Include Path로 자동 참조됩니다.
 - **`src/cpp/` (C++ 파일)**: 플랫폼 비종속적이거나 CEF C++ Views API를 사용하는 순수 C++ 코드로, 표준 C++20 옵션으로 컴파일됩니다.
-- **`src/mm/` (Objective-C++ 파일)**: macOS Cocoa(`NSApplication`, `NSMenu`, `NSApplicationDelegate`) 런타임과 직접 통신하는 구현체로, ARC(Automatic Reference Counting) 및 Objective-C++ 런타임을 통해 컴파일됩니다.
+- **`src/mm/` (Objective-C++ 파일)**: macOS Cocoa(`NSApplication`, `NSTask`, `NSRunningApplication`) 런타임과 직접 통신하는 구현체로, ARC(Automatic Reference Counting) 및 Objective-C++ 런타임을 통해 컴파일됩니다.
 
 ---
 

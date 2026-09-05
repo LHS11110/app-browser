@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>App Browser - 프로세스 관리자</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="background-glow glow-1"></div>
+  <div class="background-glow glow-2"></div>
+
+  <div class="app-layout">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-brand">
+        <div class="header-icon-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="8" y1="6" x2="21" y2="6"></line>
+            <line x1="8" y1="12" x2="21" y2="12"></line>
+            <line x1="8" y1="18" x2="21" y2="18"></line>
+            <line x1="3" y1="6" x2="3.01" y2="6"></line>
+            <line x1="3" y1="12" x2="3.01" y2="12"></line>
+            <line x1="3" y1="18" x2="3.01" y2="18"></line>
+          </svg>
+        </div>
+        <div class="header-titles">
+          <div class="title-row">
+            <h1 class="header-title">프로세스 관리자</h1>
+            <span id="process-count-badge" class="count-badge">0개 실행</span>
+          </div>
+          <p class="header-subtitle">자식 브라우저 실시간 관리</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <button id="btn-open-search" class="btn btn-primary" title="새 검색창 열기">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <span>검색창 열기</span>
+        </button>
+        <button id="btn-kill-all" class="btn btn-danger" title="모든 자식 프로세스 종료">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="15" y1="9" x2="9" y2="15"></line>
+            <line x1="9" y1="9" x2="15" y2="15"></line>
+          </svg>
+          <span>전체 종료</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Process List Container -->
+    <main class="list-container">
+      <ul id="process-list" class="process-list">
+        <!-- Dynamically rendered process items -->
+      </ul>
+
+      <!-- Empty State -->
+      <div id="empty-state" class="empty-state">
+        <div class="empty-icon-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+            <line x1="8" y1="21" x2="16" y2="21"></line>
+            <line x1="12" y1="17" x2="12" y2="21"></line>
+          </svg>
+        </div>
+        <h3 class="empty-title">실행 중인 프로세스 없음</h3>
+        <p class="empty-desc">상단의 <strong>[검색창 열기]</strong>를 눌러 새 웹 앱을 실행해보세요.</p>
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <div class="footer-info">
+        <span class="parent-info">부모 PID: <strong id="stat-parent-pid">--</strong></span>
+        <span class="divider">•</span>
+        <span id="last-sync-time" class="sync-time">동기화 대기 중</span>
+      </div>
+    </footer>
+  </div>
+
+  <script src="manager.js"></script>
+</body>
+</html>

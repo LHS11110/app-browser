@@ -1,10 +1,12 @@
 #include "client.h"
+#include "process_manager.h"
 
 #include <sstream>
 #include <string>
 
 #include "include/base/cef_callback.h"
 #include "include/cef_app.h"
+#include "include/cef_parser.h"
 #include "include/views/cef_browser_view.h"
 #include "include/views/cef_window.h"
 #include "include/wrapper/cef_closure_task.h"
@@ -85,6 +87,96 @@ bool AppBrowserClient::OnBeforePopup(
     browser->GetMainFrame()->LoadURL(url);
   }
   return true;  // Cancel default popup window creation
+}
+
+bool AppBrowserClient::OnBeforeBrowse(CefRefPtr<CefBrowser> browser,
+                                      CefRefPtr<CefFrame> frame,
+                                      CefRefPtr<CefRequest> request,
+                                      bool user_gesture,
+                                      bool is_redirect) {
+  CEF_REQUIRE_UI_THREAD();
+
+  std::string url = request->GetURL().ToString();
+  const std::string action_prefix = "action://";
+  if (url.rfind(action_prefix, 0) == 0) {
+    std::string action_part = url.substr(action_prefix.length());
+    size_t qpos = action_part.find('?');
+    std::string command = (qpos == std::string::npos) ? action_part : action_part.substr(0, qpos);
+    std::string query = (qpos == std::string::npos) ? "" : action_part.substr(qpos + 1);
+
+    // Normalize command by trimming trailing slashes (e.g., "spawn/" -> "spawn")
+    while (!command.empty() && command.back() == '/') {
+      command.pop_back();
+    }
+
+    auto get_param = [&](const std::string& key) -> std::string {
+      size_t pos = query.find(key + "=");
+      if (pos == std::string::npos) return "";
+      size_t start = pos + key.length() + 1;
+      size_t end = query.find('&', start);
+      std::string val = (end == std::string::npos) ? query.substr(start) : query.substr(start, end - start);
+      return CefURIDecode(val, true, UU_NORMAL).ToString();
+    };
+
+    if (command == "spawn") {
+      std::string target_url;
+      size_t pos = query.find("url=");
+      if (pos != std::string::npos) {
+        size_t start = pos + 4;
+        // Search for cache buster parameter &_t= if present
+        size_t end = query.find("&_t=", start);
+        std::string raw_val = (end == std::string::npos) ? query.substr(start) : query.substr(start, end - start);
+        target_url = CefURIDecode(raw_val, true, UU_NORMAL).ToString();
+      }
+      if (!target_url.empty()) {
+        ProcessManager::GetInstance()->SpawnChild(target_url);
+      }
+    } else if (command == "kill") {
+      std::string pid_str = get_param("pid");
+      if (!pid_str.empty()) {
+        ProcessManager::GetInstance()->TerminateChild(std::atoi(pid_str.c_str()));
+      }
+    } else if (command == "focus") {
+      std::string pid_str = get_param("pid");
+      if (!pid_str.empty()) {
+        ProcessManager::GetInstance()->FocusChild(std::atoi(pid_str.c_str()));
+      }
+    } else if (command == "kill-all") {
+      ProcessManager::GetInstance()->TerminateAll();
+    } else if (command == "open-search") {
+      ProcessManager::GetInstance()->ShowSearchWindow();
+    } else if (command == "ready") {
+      ProcessManager::GetInstance()->SetManagerBrowser(browser);
+      ProcessManager::GetInstance()->NotifyManagerUI();
+    }
+
+    return true; // Cancel navigation
+  }
+
+  return false;
+}
+
+void AppBrowserClient::OnAddressChange(CefRefPtr<CefBrowser> browser,
+                                       CefRefPtr<CefFrame> frame,
+                                       const CefString& url) {
+  CEF_REQUIRE_UI_THREAD();
+
+  if (!frame->IsMain())
+    return;
+
+  std::string url_str = url.ToString();
+  // When navigating away from the local search bar to an external web page
+  if (url_str.rfind("http://", 0) == 0 || url_str.rfind("https://", 0) == 0) {
+    if (auto browser_view = CefBrowserView::GetForBrowser(browser)) {
+      if (auto window = browser_view->GetWindow()) {
+        CefSize current_size = window->GetSize();
+        // If window is currently in the compact search bar size, expand to browsing size
+        if (current_size.height < 300) {
+          window->CenterWindow(CefSize(1280, 800));
+        }
+      }
+    }
+  }
 }
 
 void AppBrowserClient::OnTitleChange(CefRefPtr<CefBrowser> browser,

@@ -4,6 +4,7 @@
 #include "include/cef_life_span_handler.h"
 #include "include/cef_display_handler.h"
 #include "include/cef_context_menu_handler.h"
+#include "include/cef_request_handler.h"
 
 #include <list>
 
@@ -12,7 +13,8 @@ namespace app_browser {
 class AppBrowserClient : public CefClient,
                          public CefLifeSpanHandler,
                          public CefDisplayHandler,
-                         public CefContextMenuHandler {
+                         public CefContextMenuHandler,
+                         public CefRequestHandler {
  public:
   AppBrowserClient();
   ~AppBrowserClient() override;
@@ -21,6 +23,14 @@ class AppBrowserClient : public CefClient,
   CefRefPtr<CefLifeSpanHandler> GetLifeSpanHandler() override { return this; }
   CefRefPtr<CefDisplayHandler> GetDisplayHandler() override { return this; }
   CefRefPtr<CefContextMenuHandler> GetContextMenuHandler() override { return this; }
+  CefRefPtr<CefRequestHandler> GetRequestHandler() override { return this; }
+
+  // CefRequestHandler methods:
+  bool OnBeforeBrowse(CefRefPtr<CefBrowser> browser,
+                      CefRefPtr<CefFrame> frame,
+                      CefRefPtr<CefRequest> request,
+                      bool user_gesture,
+                      bool is_redirect) override;
 
   // CefLifeSpanHandler methods:
   void OnAfterCreated(CefRefPtr<CefBrowser> browser) override;
@@ -41,6 +51,9 @@ class AppBrowserClient : public CefClient,
                      bool* no_javascript_access) override;
 
   // CefDisplayHandler methods:
+  void OnAddressChange(CefRefPtr<CefBrowser> browser,
+                       CefRefPtr<CefFrame> frame,
+                       const CefString& url) override;
   void OnTitleChange(CefRefPtr<CefBrowser> browser,
                      const CefString& title) override;
 
