@@ -236,16 +236,48 @@ void SetAppDockIconFromData(const void* data, size_t size) {
   }
 }
 
-void SetAppDockIconForUrl(const std::string& url_str) {
-  if (url_str.empty()) return;
+std::string ExtractDomainFromUrl(const std::string& url_str) {
+  if (url_str.empty()) return "default";
   @autoreleasepool {
     NSString* pageUrlString = [NSString stringWithUTF8String:url_str.c_str()];
-    if (!pageUrlString) return;
+    if (!pageUrlString) {
+      pageUrlString = [NSString stringWithCString:url_str.c_str() encoding:NSISOLatin1StringEncoding];
+    }
+    if (!pageUrlString || [pageUrlString length] == 0) return "default";
 
     NSURL* pageUrl = [NSURL URLWithString:pageUrlString];
     NSString* host = [pageUrl host];
-    if (!host || [host length] == 0) return;
+    if ((!host || [host length] == 0) && ![pageUrlString containsString:@"://"]) {
+      NSURL* retryUrl = [NSURL URLWithString:[@"https://" stringByAppendingString:pageUrlString]];
+      host = [retryUrl host];
+    }
+    if (host && [host length] > 0) {
+      return [[host lowercaseString] UTF8String];
+    }
+  }
+  return "default";
+}
 
+uint64_t HashDomainToNaturalNumber(const std::string& domain) {
+  // 64-bit FNV-1a hash algorithm
+  uint64_t hash = 14695981039346656037ULL;
+  for (unsigned char c : domain) {
+    hash ^= static_cast<uint64_t>(c);
+    hash *= 1099511628211ULL;
+  }
+  if (hash == 0) {
+    hash = 1;
+  }
+  return hash;
+}
+
+void SetAppDockIconForUrl(const std::string& url_str) {
+  if (url_str.empty()) return;
+  std::string domain = ExtractDomainFromUrl(url_str);
+  if (domain.empty() || domain == "default") return;
+
+  @autoreleasepool {
+    NSString* host = [NSString stringWithUTF8String:domain.c_str()];
     NSString* faviconServiceUrl = [NSString stringWithFormat:@"https://www.google.com/s2/favicons?domain=%@&sz=128", host];
     NSURL* downloadUrl = [NSURL URLWithString:faviconServiceUrl];
 
@@ -341,9 +373,17 @@ int main(int argc, char* argv[]) {
                                                     error:nil];
 
     if (config.is_child || config.is_search) {
-      // Isolate cache path for each child process in separate sibling directory
+      std::string domain = "default";
+      if (config.is_search) {
+        domain = "search";
+      } else if (!config.url.empty()) {
+        domain = app_browser::ExtractDomainFromUrl(config.url);
+      }
+      uint64_t domainHash = app_browser::HashDomainToNaturalNumber(domain);
+
+      // Isolate cache path for each domain by its natural number hash
       NSString* childCacheDir = [appDataDir stringByAppendingPathComponent:
-          [NSString stringWithFormat:@"Child_%d", getpid()]];
+          [NSString stringWithFormat:@"Child_%llu", domainHash]];
       [[NSFileManager defaultManager] createDirectoryAtPath:childCacheDir
                                 withIntermediateDirectories:YES
                                                  attributes:nil

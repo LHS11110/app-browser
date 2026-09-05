@@ -10,6 +10,8 @@ void SetWindowTranslucent(CefWindowHandle handle, float alpha);
 void PositionWindowAtBottom(CefWindowHandle handle, int width, int height, int bottom_margin = 36);
 void SetAppDockIconForUrl(const std::string& url);
 void SetAppDockIconFromData(const void* data, size_t size);
+std::string ExtractDomainFromUrl(const std::string& url);
+uint64_t HashDomainToNaturalNumber(const std::string& domain);
 void ActivateApplication();
 void QuitAppCleanly();
 
