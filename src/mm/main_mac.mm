@@ -5,9 +5,9 @@
 #include "include/wrapper/cef_helpers.h"
 #include "include/wrapper/cef_library_loader.h"
 
-#include "src/app.h"
-#include "src/client.h"
-#include "src/config.h"
+#include "app.h"
+#include "client.h"
+#include "config.h"
 
 #if defined(CEF_USE_SANDBOX)
 #include "include/cef_sandbox_mac.h"

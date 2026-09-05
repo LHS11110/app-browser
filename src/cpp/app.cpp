@@ -1,5 +1,5 @@
-#include "src/app.h"
-#include "src/client.h"
+#include "app.h"
+#include "client.h"
 
 #include "include/cef_browser.h"
 #include "include/views/cef_browser_view.h"

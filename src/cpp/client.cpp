@@ -1,9 +1,8 @@
-#include "src/client.h"
+#include "client.h"
 
 #include <sstream>
 #include <string>
 
-#import <Cocoa/Cocoa.h>
 #include "include/base/cef_callback.h"
 #include "include/cef_app.h"
 #include "include/views/cef_browser_view.h"

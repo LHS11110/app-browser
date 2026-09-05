@@ -40,19 +40,39 @@ endif()
 
 SET_CEF_TARGET_OUT_DIR()
 
-# Source files
-set(APP_SOURCES
-  src/main_mac.mm
-  src/app_mac.mm
-  src/client.mm
-  src/app.h
-  src/client.h
-  src/config.h
+# Header files (.h)
+set(APP_HEADERS
+  include/app.h
+  include/client.h
+  include/config.h
 )
 
-set(APP_HELPER_SOURCES
-  src/helper_mac.cc
+# C++ source files (.cpp)
+set(APP_CPP_SOURCES
+  src/cpp/app.cpp
+  src/cpp/client.cpp
 )
+
+# Objective-C++ source files (.mm)
+set(APP_MM_SOURCES
+  src/mm/main_mac.mm
+)
+
+# Helper sub-process C++ source files (.cpp)
+set(APP_HELPER_SOURCES
+  src/cpp/helper_mac.cpp
+)
+
+# Main app combined source files
+set(APP_SOURCES
+  ${APP_HEADERS}
+  ${APP_CPP_SOURCES}
+  ${APP_MM_SOURCES}
+)
+
+source_group("Header Files" FILES ${APP_HEADERS})
+source_group("Source Files\\CPP" FILES ${APP_CPP_SOURCES} ${APP_HELPER_SOURCES})
+source_group("Source Files\\MM" FILES ${APP_MM_SOURCES})
 
 # -----------------------------------------------------------------------------
 # 3. macOS Application Bundle Configuration
@@ -83,6 +103,7 @@ if(OS_MAC)
 
   target_include_directories(${CEF_TARGET} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CEF_ROOT}
   )
 
@@ -92,6 +113,17 @@ if(OS_MAC)
 
   # Copy Chromium Embedded Framework.framework into the app bundle
   COPY_MAC_FRAMEWORK("${CEF_TARGET}" "${CEF_BINARY_DIR}" "${CEF_APP}")
+
+  # Satisfy CEF binary distribution licensing conditions: copy CEF license and credits into Resources
+  add_custom_command(
+    TARGET ${CEF_TARGET}
+    POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CEF_APP}/Contents/Resources"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CEF_ROOT}/LICENSE.txt" "${CEF_APP}/Contents/Resources/CEF_LICENSE.txt"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CEF_ROOT}/CREDITS.html" "${CEF_APP}/Contents/Resources/CEF_CREDITS.html"
+    COMMENT "Copying CEF license and credits to ${CEF_APP}/Contents/Resources"
+    VERBATIM
+  )
 
   # Create Helper targets (Main helper, GPU, Plugin, Renderer)
   foreach(_suffix_list ${CEF_HELPER_APP_SUFFIXES})
@@ -117,6 +149,7 @@ if(OS_MAC)
 
     target_include_directories(${_helper_target} PRIVATE
       ${CMAKE_CURRENT_SOURCE_DIR}
+      ${CMAKE_CURRENT_SOURCE_DIR}/include
       ${CEF_ROOT}
     )
 

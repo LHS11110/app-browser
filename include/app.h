@@ -1,7 +1,7 @@
 #pragma once
 
 #include "include/cef_app.h"
-#include "src/config.h"
+#include "config.h"
 
 namespace app_browser {
 
