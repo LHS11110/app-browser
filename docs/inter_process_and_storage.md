@@ -11,12 +11,12 @@ AppBrowser는 웹 페이지가 단일 프로세스에 갇혀있지 않고, 운�
 ```mermaid
 sequenceDiagram
     autonumber
-    participant UI as 프로세스 관리자 / 검색창 (Web UI)
-    participant Client as AppBrowserClient (C++)
-    participant PM as ProcessManager (Obj-C++)
+    participant UI as "프로세스 관리자 / 검색창 (Web UI)"
+    participant Client as "AppBrowserClient (C++)"
+    participant PM as "ProcessManager (Obj-C++)"
     participant DistNotif as NSDistributedNotificationCenter
-    participant OS as macOS Kernel (NSTask / NSRunningApplication)
-    participant Child as 자식 브라우저 프로세스 (PID)
+    participant OS as "macOS Kernel (NSTask / NSRunningApplication)"
+    participant Child as "자식 브라우저 프로세스 (PID)"
 
     Note over UI, Client: 1. Web-to-Native 통신 (action://)
     UI->>Client: window.location.href = "action://spawn?url=..."
@@ -163,28 +163,28 @@ AppBrowser는 이를 사후 타이머나 폴링 없이, 프로세스 생성 라�
 ```mermaid
 sequenceDiagram
     autonumber
-    participant UI as 프로세스 관리자 UI (manager.js)
-    participant Client as AppBrowserClient (C++)
-    participant PM as ProcessManager (Obj-C++)
+    participant UI as 프로세스 관리자 UI
+    participant Client as AppBrowserClient
+    participant PM as ProcessManager
     participant DNC as NSDistributedNotificationCenter
-    participant Child as 자식 프로세스 (CEF/AppKit)
+    participant Child as 자식 프로세스
 
     Note over UI: 1. 폴더 헤더 클릭 토글
-    UI->>UI: group.collapsed = true; saveGroups();
-    UI->>Client: dispatchAction("action://set-group-visibility?groupId=...&visible=0")
+    UI->>UI: group.collapsed 변경 및 saveGroups()
+    UI->>Client: action://set-group-visibility 호출
     
     Note over Client, PM: 2. C++ 백엔드 가시성 갱신 및 파일 영속화
-    Client->>PM: SetGroupVisibility(groupId, visible=false)
-    PM->>PM: processes_ 내 해당 그룹 프로세스 visible = false 갱신
-    PM->>PM: SaveSession() -> session_apps.json에 visible: false 기록
+    Client->>PM: SetGroupVisibility(groupId, visible)
+    PM->>PM: processes_ 가시성 플래그 갱신
+    PM->>PM: SaveSession()으로 파일에 저장
     PM->>PM: NSRunningApplication hide
-    PM->>DNC: postNotification: "AppBrowser_Visibility_<childPid>" (visible: 0)
+    PM->>DNC: AppBrowser_Visibility 알림 브로드캐스트
 
     Note over DNC, Child: 3. 자식 프로세스 윈도우서버 레이어 제외
-    DNC->>Child: RegisterChildVisibilityIpc Observer 실행
-    Child->>Child: CEF window->Hide()
-    Child->>Child: NSWindow [window orderOut:nil] (화면 즉시 제외)
-    Child->>Child: [NSApp hide:nil]
+    DNC->>Child: RegisterChildVisibilityIpc 수신
+    Child->>Child: CefWindow Hide() 실행
+    Child->>Child: NSWindow orderOut:nil 실행 (화면 제외)
+    Child->>Child: NSApp hide:nil 실행
 ```
 
 - **액션 큐(`dispatchAction`)**: 여러 폴더를 빠르게 연속해서 여닫더라도 Chromium 내비게이션 취소(Navigation Abort)가 발생하지 않도록 45ms 간격의 순차 FIFO 큐를 통해 백엔드로 유실 없이 전달됩니다.
@@ -204,27 +204,27 @@ sequenceDiagram
 
     Note over Parent, Session: 1. 직전 세션 상태 복원
     Parent->>Session: RestoreSession() 파일 파싱
-    Session-->>Parent: [{ url, groupId, visible: false }]
+    Session-->>Parent: 앱 목록 및 visible 상태 로드
     
     Note over Parent, OS: 2. --hidden 플래그 스폰 (단 1회)
     Parent->>OS: NSTask launch (--child, --url, --hidden)
     Note over Parent: 사후 타이머/반복 개입 없음 (단일 패스)
 
     Note over OS, ChildMain: 3. 자식 진입점 단 1회 활성화 분기
-    ChildMain->>ChildMain: ParseConfig() -> config.start_hidden = true
+    ChildMain->>ChildMain: ParseConfig() 수행
     alt start_hidden == true
-        ChildMain->>ChildMain: [NSApp hide:nil] (activate 호출 원천 차단)
+        ChildMain->>ChildMain: NSApp hide:nil (activate 호출 차단)
     else start_hidden == false
-        ChildMain->>ChildMain: [NSApp activateIgnoringOtherApps:YES]
+        ChildMain->>ChildMain: NSApp activateIgnoringOtherApps:YES
     end
 
     Note over ChildMain, ChildWin: 4. 윈도우 생성 훅 단 1회 표시 분기
     ChildWin->>ChildWin: OnWindowCreated() 콜백
     alt start_hidden == true
-        ChildWin->>ChildWin: window->Hide(); HideCurrentAppProcess(window);
-        Note over ChildWin: Show(), Activate(), BringToTop() 호출 일절 안 함!
+        ChildWin->>ChildWin: window Hide 및 HideCurrentAppProcess 실행
+        Note over ChildWin: Show, Activate, BringToTop 호출 차단
     else start_hidden == false
-        ChildWin->>ChildWin: window->Show(); window->Activate(); BringToTop();
+        ChildWin->>ChildWin: window Show, Activate, BringToTop 실행
     end
 ```
 
