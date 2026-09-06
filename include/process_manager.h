@@ -26,12 +26,15 @@ class ProcessManager {
   bool TerminateChild(int pid);
   void TerminateAll();
   bool FocusChild(int pid);
+  void SetChildVisibility(int pid, bool visible);
+  void SetGroupVisibility(const std::string& group_id, bool visible);
 
   // Session Persistence & Restore
   void SaveSession();
   void RestoreSession();
   void ClearSavedSession();
   void UpdateProcessMeta(int pid, const std::string& name, const std::string& group_id);
+  void UpdateProcessUrl(int pid, const std::string& url, const std::string& title);
 
   // Status & Synchronization
   void RefreshProcesses();
@@ -76,5 +79,8 @@ class ProcessManager {
 };
 
 void SendSpawnNotificationToParent(int parent_pid, const std::string& target_url);
+void SendUrlUpdateToParent(int parent_pid, int child_pid, const std::string& target_url, const std::string& title);
+void SendVisibilityNotificationToChild(int child_pid, bool visible);
+void RegisterChildVisibilityIpc(CefRefPtr<CefWindow> window);
 
 }  // namespace app_browser

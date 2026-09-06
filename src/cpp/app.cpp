@@ -183,6 +183,7 @@ void AppBrowserApp::OnContextInitialized() {
     CefRefPtr<CefWindow> window = CefWindow::CreateTopLevelWindow(
         new AppBrowserWindowDelegate(browser_view, config_));
     window->SetTitle(config_.title);
+    RegisterChildVisibilityIpc(window);
     return;
   }
 

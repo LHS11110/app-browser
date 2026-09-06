@@ -86,7 +86,8 @@ int ProcessManager::SpawnChild(const std::string& url) {
         urlNs = [NSString stringWithCString:url.c_str() encoding:NSISOLatin1StringEncoding];
       }
       NSString* urlArg = [NSString stringWithFormat:@"--url=%@", urlNs];
-      NSArray<NSString*>* arguments = @[@"--child", urlArg];
+      NSString* parentPidArg = [NSString stringWithFormat:@"--parent-pid=%d", getpid()];
+      NSArray<NSString*>* arguments = @[@"--child", urlArg, parentPidArg];
 
       NSTask* task = [[NSTask alloc] init];
       [task setExecutableURL:executableURL];
@@ -185,10 +186,44 @@ bool ProcessManager::FocusChild(int pid) {
     NSRunningApplication* app =
         [NSRunningApplication runningApplicationWithProcessIdentifier:pid];
     if (app) {
+      [app unhide];
+      SendVisibilityNotificationToChild(pid, true);
       return [app activateWithOptions:NSApplicationActivateIgnoringOtherApps];
     }
   }
   return false;
+}
+
+void ProcessManager::SetChildVisibility(int pid, bool visible) {
+  @autoreleasepool {
+    NSRunningApplication* app =
+        [NSRunningApplication runningApplicationWithProcessIdentifier:pid];
+    if (app) {
+      if (!visible) {
+        [app hide];
+      } else {
+        [app unhide];
+        [app activateWithOptions:NSApplicationActivateIgnoringOtherApps];
+      }
+    }
+    SendVisibilityNotificationToChild(pid, visible);
+  }
+}
+
+void ProcessManager::SetGroupVisibility(const std::string& group_id, bool visible) {
+  std::vector<int> target_pids;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    for (const auto& proc : processes_) {
+      if (proc.group_id == group_id || (group_id == "default" && proc.group_id.empty())) {
+        target_pids.push_back(proc.pid);
+      }
+    }
+  }
+
+  for (int pid : target_pids) {
+    SetChildVisibility(pid, visible);
+  }
 }
 
 void ProcessManager::RefreshProcesses() {
@@ -435,6 +470,23 @@ void ProcessManager::InitIpc() {
                     ProcessManager::GetInstance()->SpawnChild([urlStr UTF8String]);
                   }
                 }];
+
+    NSString* urlChangeNotifName = [NSString stringWithFormat:@"AppBrowser_UrlChange_%d", currentPid];
+    [[NSDistributedNotificationCenter defaultCenter]
+        addObserverForName:urlChangeNotifName
+                    object:nil
+                     queue:[NSOperationQueue mainQueue]
+                usingBlock:^(NSNotification* note) {
+                  NSNumber* pidNum = note.userInfo[@"pid"];
+                  NSString* urlStr = note.userInfo[@"url"];
+                  NSString* titleStr = note.userInfo[@"title"];
+                  if (pidNum && urlStr && [urlStr length] > 0) {
+                    int childPid = [pidNum intValue];
+                    std::string newUrl = [urlStr UTF8String];
+                    std::string newTitle = titleStr ? [titleStr UTF8String] : "";
+                    ProcessManager::GetInstance()->UpdateProcessUrl(childPid, newUrl, newTitle);
+                  }
+                }];
   }
 }
 
@@ -451,6 +503,70 @@ void SendSpawnNotificationToParent(int parent_pid, const std::string& target_url
                       object:nil
                     userInfo:userInfo
           deliverImmediately:YES];
+  }
+}
+
+void SendUrlUpdateToParent(int parent_pid, int child_pid, const std::string& target_url, const std::string& title) {
+  @autoreleasepool {
+    NSString* notifName = [NSString stringWithFormat:@"AppBrowser_UrlChange_%d", parent_pid];
+    NSString* urlNs = [NSString stringWithUTF8String:target_url.c_str()];
+    if (!urlNs) {
+      urlNs = [NSString stringWithCString:target_url.c_str() encoding:NSISOLatin1StringEncoding];
+    }
+    NSString* titleNs = [NSString stringWithUTF8String:title.c_str()];
+    if (!titleNs) {
+      titleNs = [NSString stringWithCString:title.c_str() encoding:NSISOLatin1StringEncoding];
+    }
+    NSDictionary* userInfo = @{
+      @"pid": @(child_pid),
+      @"url": urlNs ? urlNs : @"",
+      @"title": titleNs ? titleNs : @""
+    };
+    [[NSDistributedNotificationCenter defaultCenter]
+        postNotificationName:notifName
+                      object:nil
+                    userInfo:userInfo
+          deliverImmediately:YES];
+  }
+}
+
+void SendVisibilityNotificationToChild(int child_pid, bool visible) {
+  @autoreleasepool {
+    NSString* notifName = [NSString stringWithFormat:@"AppBrowser_Visibility_%d", child_pid];
+    NSDictionary* userInfo = @{@"visible": @(visible)};
+    [[NSDistributedNotificationCenter defaultCenter]
+        postNotificationName:notifName
+                      object:nil
+                    userInfo:userInfo
+          deliverImmediately:YES];
+  }
+}
+
+void RegisterChildVisibilityIpc(CefRefPtr<CefWindow> window) {
+  @autoreleasepool {
+    pid_t currentPid = getpid();
+    NSString* notifName = [NSString stringWithFormat:@"AppBrowser_Visibility_%d", currentPid];
+    [[NSDistributedNotificationCenter defaultCenter]
+        addObserverForName:notifName
+                    object:nil
+                     queue:[NSOperationQueue mainQueue]
+                usingBlock:^(NSNotification* note) {
+                  NSNumber* visibleNum = note.userInfo[@"visible"];
+                  BOOL visible = visibleNum ? [visibleNum boolValue] : YES;
+                  if (!visible) {
+                    if (window) {
+                      window->Hide();
+                    }
+                    [NSApp hide:nil];
+                  } else {
+                    [NSApp unhideWithoutActivation];
+                    if (window) {
+                      window->Show();
+                      window->BringToTop();
+                    }
+                    [NSApp activateIgnoringOtherApps:YES];
+                  }
+                }];
   }
 }
 
@@ -540,6 +656,31 @@ void ProcessManager::UpdateProcessMeta(int pid, const std::string& name, const s
     }
   }
   SaveSession();
+}
+
+void ProcessManager::UpdateProcessUrl(int pid, const std::string& url, const std::string& title) {
+  bool changed = false;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    for (auto& proc : processes_) {
+      if (proc.pid == pid) {
+        if (!url.empty() && proc.url != url) {
+          proc.url = url;
+          changed = true;
+        }
+        if (!title.empty() && proc.title != title) {
+          proc.title = title;
+          changed = true;
+        }
+        break;
+      }
+    }
+  }
+
+  if (changed) {
+    SaveSession();
+    NotifyManagerUI();
+  }
 }
 
 }  // namespace app_browser

@@ -136,15 +136,22 @@ document.addEventListener('DOMContentLoaded', () => {
   function getProcessInfo(item, index) {
     const pidStr = String(item.pid);
     let meta = processMeta[pidStr];
+    const friendlyName = generateFriendlyName(item, index);
+
     if (!meta) {
       // Create new meta entry using item.name / item.groupId from backend if provided
+      const isCustom = Boolean(item.name && item.name.length > 0 && item.name !== item.url && item.name !== friendlyName);
       meta = {
-        name: item.name || generateFriendlyName(item, index),
-        groupId: (item.groupId && groups.some(g => g.id === item.groupId)) ? item.groupId : 'default'
+        name: isCustom ? item.name : friendlyName,
+        groupId: (item.groupId && groups.some(g => g.id === item.groupId)) ? item.groupId : 'default',
+        isCustomName: isCustom
       };
       processMeta[pidStr] = meta;
       saveProcessMeta(processMeta);
       syncMetaToBackend(item.pid, meta.name, meta.groupId);
+    } else if (!meta.isCustomName) {
+      // If user hasn't explicitly customized the name, keep it synced with the current URL/domain/title
+      meta.name = friendlyName;
     }
 
     // Verify assigned group still exists
@@ -158,7 +165,7 @@ document.addEventListener('DOMContentLoaded', () => {
       pid: item.pid,
       url: item.url || '',
       startTime: item.startTime || '--:--:--',
-      name: meta.name || generateFriendlyName(item, index),
+      name: meta.name || friendlyName,
       groupId: meta.groupId || 'default'
     };
   }
@@ -227,6 +234,9 @@ document.addEventListener('DOMContentLoaded', () => {
               </div>
               <span class="folder-title" title="더블 클릭하여 폴더명 변경">${escapeHtml(group.name)}</span>
               <span class="folder-count-badge">${itemsInGroup.length}개</span>
+              ${isCollapsed && itemsInGroup.length > 0 ? `
+                <span class="folder-hidden-badge" title="폴더가 접혀 창이 숨겨진 상태입니다">숨김</span>
+              ` : ''}
             </div>
             <div class="folder-header-actions">
               <button type="button" class="btn-folder-action edit-group" data-action="rename-group" data-group-id="${group.id}" title="그룹명 변경">
@@ -621,6 +631,9 @@ document.addEventListener('DOMContentLoaded', () => {
         group.collapsed = !group.collapsed;
         saveGroups(groups);
         render();
+
+        const visible = !group.collapsed ? 1 : 0;
+        window.location.href = `action://set-group-visibility?groupId=${encodeURIComponent(groupId)}&visible=${visible}`;
       }
       return;
     }
@@ -648,6 +661,17 @@ document.addEventListener('DOMContentLoaded', () => {
       const action = actionBtn.getAttribute('data-action');
       const pid = actionBtn.getAttribute('data-pid');
       if (action === 'focus' && pid) {
+        // If the process was in a collapsed group, un-collapse it so user sees it
+        const itemEl = actionBtn.closest('.process-item');
+        if (itemEl) {
+          const gId = itemEl.getAttribute('data-group-id');
+          const grp = groups.find(g => g.id === gId);
+          if (grp && grp.collapsed) {
+            grp.collapsed = false;
+            saveGroups(groups);
+            render();
+          }
+        }
         window.location.href = `action://focus?pid=${encodeURIComponent(pid)}`;
       } else if (action === 'kill' && pid) {
         window.location.href = `action://kill?pid=${encodeURIComponent(pid)}`;
@@ -701,6 +725,7 @@ document.addEventListener('DOMContentLoaded', () => {
       processMeta[pidStr] = { groupId: groupId };
     }
     processMeta[pidStr].name = newName;
+    processMeta[pidStr].isCustomName = true;
     saveProcessMeta(processMeta);
     syncMetaToBackend(pid, newName, groupId);
 
@@ -743,6 +768,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     render();
     const targetGroup = groups.find(g => g.id === newGroupId);
+    if (targetGroup) {
+      const isTargetCollapsed = Boolean(targetGroup.collapsed);
+      const visible = isTargetCollapsed ? 0 : 1;
+      setTimeout(() => {
+        window.location.href = `action://set-child-visibility?pid=${pid}&visible=${visible}`;
+      }, 50);
+    }
     showToast(`'${processName}' 창이 '${targetGroup ? targetGroup.name : ''}'(으)로 이동되었습니다.`, false);
   });
 

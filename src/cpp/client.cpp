@@ -5,6 +5,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <unistd.h>
 
 #include "include/base/cef_callback.h"
 #include "include/cef_app.h"
@@ -232,6 +233,20 @@ bool AppBrowserClient::OnBeforeBrowse(CefRefPtr<CefBrowser> browser,
     } else if (command == "ready") {
       ProcessManager::GetInstance()->SetManagerBrowser(browser);
       ProcessManager::GetInstance()->NotifyManagerUI();
+    } else if (command == "set-group-visibility") {
+      std::string group_id = get_param("groupId");
+      std::string visible_str = get_param("visible");
+      bool visible = (visible_str == "1" || visible_str == "true");
+      if (!group_id.empty()) {
+        ProcessManager::GetInstance()->SetGroupVisibility(group_id, visible);
+      }
+    } else if (command == "set-child-visibility") {
+      std::string pid_str = get_param("pid");
+      std::string visible_str = get_param("visible");
+      bool visible = (visible_str == "1" || visible_str == "true");
+      if (!pid_str.empty()) {
+        ProcessManager::GetInstance()->SetChildVisibility(std::atoi(pid_str.c_str()), visible);
+      }
     }
 
     return true; // Cancel navigation
@@ -249,6 +264,9 @@ void AppBrowserClient::OnAddressChange(CefRefPtr<CefBrowser> browser,
     return;
 
   std::string url_str = url.ToString();
+  if (url_str.empty() || url_str == "about:blank")
+    return;
+
   // When navigating away from the local search bar to an external web page
   if (url_str.rfind("http://", 0) == 0 || url_str.rfind("https://", 0) == 0) {
     if (config_.is_child) {
@@ -264,15 +282,38 @@ void AppBrowserClient::OnAddressChange(CefRefPtr<CefBrowser> browser,
       }
     }
   }
+
+  // Real-time notification to Parent process when child process URL changes
+  if (config_.is_child && config_.parent_pid > 0) {
+    std::string title_str;
+    if (auto browser_view = CefBrowserView::GetForBrowser(browser)) {
+      if (auto window = browser_view->GetWindow()) {
+        title_str = window->GetTitle().ToString();
+      }
+    }
+    SendUrlUpdateToParent(config_.parent_pid, getpid(), url_str, title_str);
+  }
 }
 
 void AppBrowserClient::OnTitleChange(CefRefPtr<CefBrowser> browser,
                                      const CefString& title) {
   CEF_REQUIRE_UI_THREAD();
 
+  std::string title_str = title.ToString();
   if (auto browser_view = CefBrowserView::GetForBrowser(browser)) {
     if (auto window = browser_view->GetWindow()) {
       window->SetTitle(title);
+    }
+  }
+
+  // Real-time title update to Parent process
+  if (config_.is_child && config_.parent_pid > 0 && !title_str.empty()) {
+    std::string current_url;
+    if (auto frame = browser->GetMainFrame()) {
+      current_url = frame->GetURL().ToString();
+    }
+    if (!current_url.empty() && current_url != "about:blank") {
+      SendUrlUpdateToParent(config_.parent_pid, getpid(), current_url, title_str);
     }
   }
 }
