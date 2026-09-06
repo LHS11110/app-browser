@@ -124,24 +124,34 @@ document.addEventListener('DOMContentLoaded', () => {
     return `브라우저 창 ${index + 1}`;
   }
 
+  function syncMetaToBackend(pid, name, groupId) {
+    if (!pid) return;
+    try {
+      const url = `action://update-meta?pid=${encodeURIComponent(pid)}&name=${encodeURIComponent(name || '')}&groupId=${encodeURIComponent(groupId || 'default')}`;
+      window.location.href = url;
+    } catch (e) {}
+  }
+
   // Resolve process name and group
   function getProcessInfo(item, index) {
     const pidStr = String(item.pid);
     let meta = processMeta[pidStr];
     if (!meta) {
-      // Create new meta entry
+      // Create new meta entry using item.name / item.groupId from backend if provided
       meta = {
-        name: generateFriendlyName(item, index),
-        groupId: 'default'
+        name: item.name || generateFriendlyName(item, index),
+        groupId: (item.groupId && groups.some(g => g.id === item.groupId)) ? item.groupId : 'default'
       };
       processMeta[pidStr] = meta;
       saveProcessMeta(processMeta);
+      syncMetaToBackend(item.pid, meta.name, meta.groupId);
     }
 
     // Verify assigned group still exists
     if (!groups.some(g => g.id === meta.groupId)) {
       meta.groupId = 'default';
       saveProcessMeta(processMeta);
+      syncMetaToBackend(item.pid, meta.name, meta.groupId);
     }
 
     return {
@@ -692,6 +702,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     processMeta[pidStr].name = newName;
     saveProcessMeta(processMeta);
+    syncMetaToBackend(pid, newName, groupId);
 
     editingPid = null;
     render();
@@ -728,6 +739,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     processMeta[pidStr].groupId = newGroupId;
     saveProcessMeta(processMeta);
+    syncMetaToBackend(pid, processName, newGroupId);
 
     render();
     const targetGroup = groups.find(g => g.id === newGroupId);

@@ -44,6 +44,13 @@ std::string EscapeJsonString(const std::string& input) {
   return ss.str();
 }
 
+NSString* GetSessionFilePath() {
+  NSString* appSupport = [NSSearchPathForDirectoriesInDomains(
+      NSApplicationSupportDirectory, NSUserDomainMask, YES) firstObject];
+  NSString* appDataDir = [appSupport stringByAppendingPathComponent:@"AppBrowser"];
+  return [appDataDir stringByAppendingPathComponent:@"session_apps.json"];
+}
+
 }  // namespace
 
 ProcessManager::ProcessManager() = default;
@@ -124,6 +131,7 @@ int ProcessManager::SpawnChild(const std::string& url) {
     }
   }
 
+  SaveSession();
   NotifyManagerUI();
   return new_pid;
 }
@@ -141,6 +149,7 @@ bool ProcessManager::TerminateChild(int pid) {
     }
   }
 
+  SaveSession();
   NotifyManagerUI();
   return true;
 }
@@ -211,6 +220,7 @@ void ProcessManager::RefreshProcesses() {
   }
 
   if (changed) {
+    SaveSession();
     NotifyManagerUI();
   }
 }
@@ -231,6 +241,8 @@ std::string ProcessManager::ToJson() const {
     ss << "{\"pid\":" << p.pid
        << ",\"url\":\"" << EscapeJsonString(p.url) << "\""
        << ",\"title\":\"" << EscapeJsonString(p.title) << "\""
+       << ",\"name\":\"" << EscapeJsonString(p.name) << "\""
+       << ",\"groupId\":\"" << EscapeJsonString(p.group_id.empty() ? "default" : p.group_id) << "\""
        << ",\"startTime\":\"" << EscapeJsonString(p.start_time) << "\"}";
   }
 
@@ -440,6 +452,94 @@ void SendSpawnNotificationToParent(int parent_pid, const std::string& target_url
                     userInfo:userInfo
           deliverImmediately:YES];
   }
+}
+
+void ProcessManager::SaveSession() {
+  std::vector<ChildProcessInfo> procs_copy;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    procs_copy = processes_;
+  }
+
+  @autoreleasepool {
+    NSMutableArray* arr = [NSMutableArray array];
+    for (const auto& p : procs_copy) {
+      if (p.url.empty()) continue;
+      NSMutableDictionary* item = [NSMutableDictionary dictionary];
+      item[@"url"] = [NSString stringWithUTF8String:p.url.c_str()];
+      if (!p.name.empty()) {
+        item[@"name"] = [NSString stringWithUTF8String:p.name.c_str()];
+      }
+      if (!p.group_id.empty()) {
+        item[@"groupId"] = [NSString stringWithUTF8String:p.group_id.c_str()];
+      }
+      [arr addObject:item];
+    }
+
+    NSError* error = nil;
+    NSData* data = [NSJSONSerialization dataWithJSONObject:arr
+                                                   options:NSJSONWritingPrettyPrinted
+                                                     error:&error];
+    if (data && !error) {
+      NSString* path = GetSessionFilePath();
+      [data writeToFile:path atomically:YES];
+    }
+  }
+}
+
+void ProcessManager::RestoreSession() {
+  @autoreleasepool {
+    NSString* path = GetSessionFilePath();
+    if (![[NSFileManager defaultManager] fileExistsAtPath:path]) {
+      return;
+    }
+
+    NSData* data = [NSData dataWithContentsOfFile:path];
+    if (!data) return;
+
+    NSError* error = nil;
+    id json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&error];
+    if (!json || ![json isKindOfClass:[NSArray class]] || error) {
+      return;
+    }
+
+    NSArray* arr = (NSArray*)json;
+    for (NSDictionary* item in arr) {
+      if (![item isKindOfClass:[NSDictionary class]]) continue;
+      NSString* urlNs = item[@"url"];
+      if (!urlNs || [urlNs length] == 0) continue;
+
+      std::string url = [urlNs UTF8String];
+      std::string name = item[@"name"] ? [item[@"name"] UTF8String] : "";
+      std::string groupId = item[@"groupId"] ? [item[@"groupId"] UTF8String] : "default";
+
+      int new_pid = SpawnChild(url);
+      if (new_pid > 0 && (!name.empty() || !groupId.empty())) {
+        UpdateProcessMeta(new_pid, name, groupId);
+      }
+    }
+  }
+}
+
+void ProcessManager::ClearSavedSession() {
+  @autoreleasepool {
+    NSString* path = GetSessionFilePath();
+    [[NSFileManager defaultManager] removeItemAtPath:path error:nil];
+  }
+}
+
+void ProcessManager::UpdateProcessMeta(int pid, const std::string& name, const std::string& group_id) {
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    for (auto& proc : processes_) {
+      if (proc.pid == pid) {
+        if (!name.empty()) proc.name = name;
+        if (!group_id.empty()) proc.group_id = group_id;
+        break;
+      }
+    }
+  }
+  SaveSession();
 }
 
 }  // namespace app_browser

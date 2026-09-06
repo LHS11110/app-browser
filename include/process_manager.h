@@ -13,6 +13,8 @@ struct ChildProcessInfo {
   std::string url;
   std::string title;
   std::string start_time;
+  std::string name;
+  std::string group_id = "default";
 };
 
 class ProcessManager {
@@ -24,6 +26,12 @@ class ProcessManager {
   bool TerminateChild(int pid);
   void TerminateAll();
   bool FocusChild(int pid);
+
+  // Session Persistence & Restore
+  void SaveSession();
+  void RestoreSession();
+  void ClearSavedSession();
+  void UpdateProcessMeta(int pid, const std::string& name, const std::string& group_id);
 
   // Status & Synchronization
   void RefreshProcesses();

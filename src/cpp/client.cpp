@@ -215,6 +215,14 @@ bool AppBrowserClient::OnBeforeBrowse(CefRefPtr<CefBrowser> browser,
       }
     } else if (command == "kill-all") {
       ProcessManager::GetInstance()->TerminateAll();
+      ProcessManager::GetInstance()->ClearSavedSession();
+    } else if (command == "update-meta") {
+      std::string pid_str = get_param("pid");
+      std::string name = get_param("name");
+      std::string group_id = get_param("groupId");
+      if (!pid_str.empty()) {
+        ProcessManager::GetInstance()->UpdateProcessMeta(std::atoi(pid_str.c_str()), name, group_id);
+      }
     } else if (command == "open-search") {
       ProcessManager::GetInstance()->ShowSearchWindow();
     } else if (command == "open-bookmarks") {

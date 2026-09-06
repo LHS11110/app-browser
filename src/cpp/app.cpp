@@ -19,6 +19,7 @@ static bool g_is_quitting = false;
 void QuitAppCleanly() {
   if (g_is_quitting) return;
   g_is_quitting = true;
+  ProcessManager::GetInstance()->SaveSession();
   ProcessManager::GetInstance()->TerminateAll();
   ProcessManager::GetInstance()->CloseAllWindows();
   if (auto client = AppBrowserClient::GetInstance()) {
@@ -271,6 +272,9 @@ void AppBrowserApp::OnContextInitialized() {
   bookmarks_window->SetTitle(bookmarks_config.title);
 
   ProcessManager::GetInstance()->SetBookmarksWindow(bookmarks_window);
+
+  // Restore previous session web apps if any
+  ProcessManager::GetInstance()->RestoreSession();
 
   // Schedule periodic child process liveness checking
   ScheduleProcessLivenessCheck();
