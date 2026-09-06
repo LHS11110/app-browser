@@ -71,5 +71,3 @@ Testing/
 # CEF dependency
 third_party/
 *.tar.bz2
-
-docs/
