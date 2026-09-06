@@ -59,7 +59,7 @@ class AppBrowserWindowDelegate : public CefWindowDelegate {
     } else {
       window->CenterWindow(CefSize(config_.width, config_.height));
     }
-    if (is_search_ || is_bookmarks_) {
+    if (is_search_ || is_bookmarks_ || is_manager_) {
       window->SetBackgroundColor(CefColorSetARGB(0, 0, 0, 0));
       browser_view_->SetBackgroundColor(CefColorSetARGB(0, 0, 0, 0));
     }
@@ -69,6 +69,8 @@ class AppBrowserWindowDelegate : public CefWindowDelegate {
     ActivateApplication();
     if (config_.is_translucent) {
       SetWindowTranslucent(window->GetWindowHandle(), config_.alpha);
+    } else {
+      SetWindowOpaque(window->GetWindowHandle());
     }
   }
 
@@ -192,7 +194,7 @@ void AppBrowserApp::OnContextInitialized() {
     search_config.min_width = 300;
     search_config.min_height = 50;
     search_config.is_translucent = true;
-    search_config.alpha = 1.0f;
+    search_config.alpha = 0.70f;
 
     CefRefPtr<CefBrowserView> search_browser_view = CefBrowserView::CreateBrowserView(
         client, search_config.url, transparent_settings, nullptr, nullptr,
@@ -218,7 +220,7 @@ void AppBrowserApp::OnContextInitialized() {
   manager_config.min_width = 380;
   manager_config.min_height = 480;
   manager_config.is_translucent = true;
-  manager_config.alpha = 0.88f;
+  manager_config.alpha = 0.70f;
 
   CefRefPtr<CefBrowserView> manager_browser_view = CefBrowserView::CreateBrowserView(
       client, manager_config.url, transparent_settings, nullptr, nullptr,
@@ -237,7 +239,7 @@ void AppBrowserApp::OnContextInitialized() {
   search_config.min_width = 300;
   search_config.min_height = 50;
   search_config.is_translucent = true;
-  search_config.alpha = 1.0f;
+  search_config.alpha = 0.70f;
 
   CefRefPtr<CefBrowserView> search_browser_view = CefBrowserView::CreateBrowserView(
       client, search_config.url, transparent_settings, nullptr, nullptr,
@@ -258,7 +260,7 @@ void AppBrowserApp::OnContextInitialized() {
   bookmarks_config.min_width = 360;
   bookmarks_config.min_height = 300;
   bookmarks_config.is_translucent = true;
-  bookmarks_config.alpha = 1.0f;
+  bookmarks_config.alpha = 0.90f;
 
   CefRefPtr<CefBrowserView> bookmarks_browser_view = CefBrowserView::CreateBrowserView(
       client, bookmarks_config.url, transparent_settings, nullptr, nullptr,

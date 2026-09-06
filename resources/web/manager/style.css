@@ -1,12 +1,12 @@
 :root {
-  --bg-base: rgba(10, 14, 23, 0.65);
-  --bg-surface: rgba(17, 24, 39, 0.48);
-  --bg-group: rgba(18, 26, 43, 0.40);
-  --bg-item: rgba(24, 32, 51, 0.52);
-  --bg-item-hover: rgba(33, 44, 70, 0.72);
-  --border-subtle: rgba(255, 255, 255, 0.08);
-  --border-group: rgba(255, 255, 255, 0.10);
-  --border-hover: rgba(99, 102, 241, 0.45);
+  --bg-base: #0b0f19;
+  --bg-surface: #111827;
+  --bg-group: #141d2e;
+  --bg-item: #1c263b;
+  --bg-item-hover: #263552;
+  --border-subtle: #243049;
+  --border-group: #2d3b59;
+  --border-hover: rgba(99, 102, 241, 0.65);
   --text-primary: #f8fafc;
   --text-secondary: #94a3b8;
   --text-muted: #64748b;
@@ -37,8 +37,6 @@ body {
   user-select: none;
   -webkit-user-select: none;
   -webkit-font-smoothing: antialiased;
-  backdrop-filter: blur(36px);
-  -webkit-backdrop-filter: blur(36px);
 }
 
 /* Ambient Glow */

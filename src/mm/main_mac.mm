@@ -135,10 +135,37 @@ void SetWindowTranslucent(CefWindowHandle handle, float alpha) {
       [window setBackgroundColor:[NSColor clearColor]];
       [window setAlphaValue:alpha];
       [window setHasShadow:YES];
-      [window setTitlebarAppearsTransparent:YES];
       [view setWantsLayer:YES];
       view.layer.backgroundColor = [NSColor clearColor].CGColor;
       view.layer.opaque = NO;
+    };
+
+    NSWindow* window = [view window];
+    if (window) {
+      configureWindow(window);
+    } else {
+      dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(50 * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{
+        configureWindow([view window]);
+      });
+    }
+  });
+}
+
+void SetWindowOpaque(CefWindowHandle handle) {
+  if (!handle) return;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    NSView* view = CAST_CEF_WINDOW_HANDLE_TO_NSVIEW(handle);
+    if (!view) return;
+
+    auto configureWindow = ^(NSWindow* window) {
+      if (!window) return;
+      [window setOpaque:YES];
+      [window setAlphaValue:1.0f];
+      [window setTitlebarAppearsTransparent:NO];
+      [window setBackgroundColor:[NSColor colorWithSRGBRed:11.0/255.0 green:15.0/255.0 blue:25.0/255.0 alpha:1.0]];
+      [view setWantsLayer:YES];
+      view.layer.backgroundColor = [NSColor colorWithSRGBRed:11.0/255.0 green:15.0/255.0 blue:25.0/255.0 alpha:1.0].CGColor;
+      view.layer.opaque = YES;
     };
 
     NSWindow* window = [view window];
