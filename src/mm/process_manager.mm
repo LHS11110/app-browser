@@ -66,7 +66,7 @@ ProcessManager* ProcessManager::GetInstance() {
 
 static NSMutableArray<NSTask*>* g_activeTasks = nil;
 
-int ProcessManager::SpawnChild(const std::string& url) {
+int ProcessManager::SpawnChild(const std::string& url, bool visible) {
   int new_pid = -1;
   {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -87,7 +87,11 @@ int ProcessManager::SpawnChild(const std::string& url) {
       }
       NSString* urlArg = [NSString stringWithFormat:@"--url=%@", urlNs];
       NSString* parentPidArg = [NSString stringWithFormat:@"--parent-pid=%d", getpid()];
-      NSArray<NSString*>* arguments = @[@"--child", urlArg, parentPidArg];
+      NSMutableArray<NSString*>* arguments =
+          [NSMutableArray arrayWithObjects:@"--child", urlArg, parentPidArg, nil];
+      if (!visible) {
+        [arguments addObject:@"--hidden"];
+      }
 
       NSTask* task = [[NSTask alloc] init];
       [task setExecutableURL:executableURL];
@@ -116,19 +120,31 @@ int ProcessManager::SpawnChild(const std::string& url) {
       info.pid = static_cast<int>(pid);
       info.url = url;
       info.title = url;
+      info.visible = visible;
       info.start_time = GetCurrentTimestamp();
 
       processes_.push_back(info);
       new_pid = info.pid;
 
-      // Ensure macOS brings newly spawned child browser to the foreground
-      dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(400 * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{
-        NSRunningApplication* childApp =
-            [NSRunningApplication runningApplicationWithProcessIdentifier:pid];
-        if (childApp) {
-          [childApp activateWithOptions:NSApplicationActivateIgnoringOtherApps];
-        }
-      });
+      if (visible) {
+        // Ensure macOS brings newly spawned child browser to the foreground
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(400 * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{
+          NSRunningApplication* childApp =
+              [NSRunningApplication runningApplicationWithProcessIdentifier:pid];
+          if (childApp) {
+            [childApp activateWithOptions:NSApplicationActivateIgnoringOtherApps];
+          }
+        });
+      } else {
+        // If spawned hidden, guarantee it remains hidden
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(300 * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{
+          NSRunningApplication* childApp =
+              [NSRunningApplication runningApplicationWithProcessIdentifier:pid];
+          if (childApp) {
+            [childApp hide];
+          }
+        });
+      }
     }
   }
 
@@ -182,12 +198,11 @@ void ProcessManager::TerminateAll() {
 }
 
 bool ProcessManager::FocusChild(int pid) {
+  SetChildVisibility(pid, true);
   @autoreleasepool {
     NSRunningApplication* app =
         [NSRunningApplication runningApplicationWithProcessIdentifier:pid];
     if (app) {
-      [app unhide];
-      SendVisibilityNotificationToChild(pid, true);
       return [app activateWithOptions:NSApplicationActivateIgnoringOtherApps];
     }
   }
@@ -195,6 +210,20 @@ bool ProcessManager::FocusChild(int pid) {
 }
 
 void ProcessManager::SetChildVisibility(int pid, bool visible) {
+  bool changed = false;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    for (auto& proc : processes_) {
+      if (proc.pid == pid) {
+        if (proc.visible != visible) {
+          proc.visible = visible;
+          changed = true;
+        }
+        break;
+      }
+    }
+  }
+
   @autoreleasepool {
     NSRunningApplication* app =
         [NSRunningApplication runningApplicationWithProcessIdentifier:pid];
@@ -208,21 +237,48 @@ void ProcessManager::SetChildVisibility(int pid, bool visible) {
     }
     SendVisibilityNotificationToChild(pid, visible);
   }
+
+  if (changed) {
+    SaveSession();
+    NotifyManagerUI();
+  }
 }
 
 void ProcessManager::SetGroupVisibility(const std::string& group_id, bool visible) {
   std::vector<int> target_pids;
+  bool changed = false;
   {
     std::lock_guard<std::mutex> lock(mutex_);
-    for (const auto& proc : processes_) {
+    for (auto& proc : processes_) {
       if (proc.group_id == group_id || (group_id == "default" && proc.group_id.empty())) {
         target_pids.push_back(proc.pid);
+        if (proc.visible != visible) {
+          proc.visible = visible;
+          changed = true;
+        }
       }
     }
   }
 
   for (int pid : target_pids) {
-    SetChildVisibility(pid, visible);
+    @autoreleasepool {
+      NSRunningApplication* app =
+          [NSRunningApplication runningApplicationWithProcessIdentifier:pid];
+      if (app) {
+        if (!visible) {
+          [app hide];
+        } else {
+          [app unhide];
+          [app activateWithOptions:NSApplicationActivateIgnoringOtherApps];
+        }
+      }
+      SendVisibilityNotificationToChild(pid, visible);
+    }
+  }
+
+  if (changed) {
+    SaveSession();
+    NotifyManagerUI();
   }
 }
 
@@ -278,6 +334,7 @@ std::string ProcessManager::ToJson() const {
        << ",\"title\":\"" << EscapeJsonString(p.title) << "\""
        << ",\"name\":\"" << EscapeJsonString(p.name) << "\""
        << ",\"groupId\":\"" << EscapeJsonString(p.group_id.empty() ? "default" : p.group_id) << "\""
+       << ",\"visible\":" << (p.visible ? "true" : "false")
        << ",\"startTime\":\"" << EscapeJsonString(p.start_time) << "\"}";
   }
 
@@ -570,6 +627,17 @@ void RegisterChildVisibilityIpc(CefRefPtr<CefWindow> window) {
   }
 }
 
+void HideCurrentAppProcess(CefRefPtr<CefWindow> window) {
+  @autoreleasepool {
+    if (window) {
+      window->Hide();
+    }
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [NSApp hide:nil];
+    });
+  }
+}
+
 void ProcessManager::SaveSession() {
   std::vector<ChildProcessInfo> procs_copy;
   {
@@ -589,6 +657,7 @@ void ProcessManager::SaveSession() {
       if (!p.group_id.empty()) {
         item[@"groupId"] = [NSString stringWithUTF8String:p.group_id.c_str()];
       }
+      item[@"visible"] = @(p.visible);
       [arr addObject:item];
     }
 
@@ -628,10 +697,16 @@ void ProcessManager::RestoreSession() {
       std::string url = [urlNs UTF8String];
       std::string name = item[@"name"] ? [item[@"name"] UTF8String] : "";
       std::string groupId = item[@"groupId"] ? [item[@"groupId"] UTF8String] : "default";
+      BOOL visible = (item[@"visible"] != nil) ? [item[@"visible"] boolValue] : YES;
 
-      int new_pid = SpawnChild(url);
-      if (new_pid > 0 && (!name.empty() || !groupId.empty())) {
-        UpdateProcessMeta(new_pid, name, groupId);
+      int new_pid = SpawnChild(url, visible);
+      if (new_pid > 0) {
+        if (!name.empty() || !groupId.empty()) {
+          UpdateProcessMeta(new_pid, name, groupId);
+        }
+        if (!visible) {
+          SetChildVisibility(new_pid, false);
+        }
       }
     }
   }

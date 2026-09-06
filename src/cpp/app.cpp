@@ -184,6 +184,9 @@ void AppBrowserApp::OnContextInitialized() {
         new AppBrowserWindowDelegate(browser_view, config_));
     window->SetTitle(config_.title);
     RegisterChildVisibilityIpc(window);
+    if (config_.start_hidden) {
+      HideCurrentAppProcess(window);
+    }
     return;
   }
 

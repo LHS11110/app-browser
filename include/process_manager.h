@@ -15,6 +15,7 @@ struct ChildProcessInfo {
   std::string start_time;
   std::string name;
   std::string group_id = "default";
+  bool visible = true;
 };
 
 class ProcessManager {
@@ -22,7 +23,7 @@ class ProcessManager {
   static ProcessManager* GetInstance();
 
   // Process Controls
-  int SpawnChild(const std::string& url);
+  int SpawnChild(const std::string& url, bool visible = true);
   bool TerminateChild(int pid);
   void TerminateAll();
   bool FocusChild(int pid);
@@ -82,5 +83,6 @@ void SendSpawnNotificationToParent(int parent_pid, const std::string& target_url
 void SendUrlUpdateToParent(int parent_pid, int child_pid, const std::string& target_url, const std::string& title);
 void SendVisibilityNotificationToChild(int child_pid, bool visible);
 void RegisterChildVisibilityIpc(CefRefPtr<CefWindow> window);
+void HideCurrentAppProcess(CefRefPtr<CefWindow> window);
 
 }  // namespace app_browser

@@ -15,6 +15,27 @@ document.addEventListener('DOMContentLoaded', () => {
   let editingPid = null;
   let toastTimer = null;
 
+  // Action Queue for safe sequential native IPC dispatching
+  const actionQueue = [];
+  let isDispatchingAction = false;
+
+  function dispatchAction(actionUrl) {
+    if (!actionUrl) return;
+    actionQueue.push(actionUrl);
+    processActionQueue();
+  }
+
+  function processActionQueue() {
+    if (isDispatchingAction || actionQueue.length === 0) return;
+    isDispatchingAction = true;
+    const nextUrl = actionQueue.shift();
+    window.location.href = nextUrl;
+    setTimeout(() => {
+      isDispatchingAction = false;
+      processActionQueue();
+    }, 45);
+  }
+
   // LocalStorage Keys
   const STORAGE_GROUPS = 'appbrowser_groups_v1';
   const STORAGE_PROCESS_META = 'appbrowser_process_meta_v1';
@@ -128,7 +149,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!pid) return;
     try {
       const url = `action://update-meta?pid=${encodeURIComponent(pid)}&name=${encodeURIComponent(name || '')}&groupId=${encodeURIComponent(groupId || 'default')}`;
-      window.location.href = url;
+      dispatchAction(url);
     } catch (e) {}
   }
 
@@ -361,6 +382,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  let initialVisibilitySynced = false;
+
   // C++ calls: window.updateProcessList(data)
   window.updateProcessList = function(data) {
     if (!data) return;
@@ -369,6 +392,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const now = new Date();
     lastSyncTimeEl.textContent = `동기화: ${now.toLocaleTimeString()}`;
+
+    // On initial list load, synchronize visibility for any collapsed groups:
+    // This ensures that if a folder is closed, all child processes inside it are immediately hidden
+    if (!initialVisibilitySynced && currentProcesses.length > 0) {
+      initialVisibilitySynced = true;
+      groups.forEach((g, idx) => {
+        if (g.collapsed) {
+          const hasProcs = currentProcesses.some(p => {
+            const m = processMeta[String(p.pid)];
+            const gid = (m && m.groupId) ? m.groupId : (p.groupId || 'default');
+            return gid === g.id;
+          });
+          if (hasProcs) {
+            dispatchAction(`action://set-group-visibility?groupId=${encodeURIComponent(g.id)}&visible=0`);
+          }
+        }
+      });
+    }
 
     render();
   };
@@ -580,7 +621,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast(`'${deletedName}' 그룹이 삭제되었습니다.`, false);
       } else if (confirmState.action === 'kill-all') {
         closeConfirmModal();
-        window.location.href = 'action://kill-all';
+        dispatchAction('action://kill-all');
         showToast('모든 창을 종료했습니다.', false);
       }
     });
@@ -633,7 +674,7 @@ document.addEventListener('DOMContentLoaded', () => {
         render();
 
         const visible = !group.collapsed ? 1 : 0;
-        window.location.href = `action://set-group-visibility?groupId=${encodeURIComponent(groupId)}&visible=${visible}`;
+        dispatchAction(`action://set-group-visibility?groupId=${encodeURIComponent(groupId)}&visible=${visible}`);
       }
       return;
     }
@@ -672,9 +713,9 @@ document.addEventListener('DOMContentLoaded', () => {
             render();
           }
         }
-        window.location.href = `action://focus?pid=${encodeURIComponent(pid)}`;
+        dispatchAction(`action://focus?pid=${encodeURIComponent(pid)}`);
       } else if (action === 'kill' && pid) {
-        window.location.href = `action://kill?pid=${encodeURIComponent(pid)}`;
+        dispatchAction(`action://kill?pid=${encodeURIComponent(pid)}`);
       }
       return;
     }
@@ -771,22 +812,20 @@ document.addEventListener('DOMContentLoaded', () => {
     if (targetGroup) {
       const isTargetCollapsed = Boolean(targetGroup.collapsed);
       const visible = isTargetCollapsed ? 0 : 1;
-      setTimeout(() => {
-        window.location.href = `action://set-child-visibility?pid=${pid}&visible=${visible}`;
-      }, 50);
+      dispatchAction(`action://set-child-visibility?pid=${pid}&visible=${visible}`);
     }
     showToast(`'${processName}' 창이 '${targetGroup ? targetGroup.name : ''}'(으)로 이동되었습니다.`, false);
   });
 
   // Open Search Window
   btnOpenSearchEl.addEventListener('click', () => {
-    window.location.href = 'action://open-search';
+    dispatchAction('action://open-search');
   });
 
   // Open Bookmarks Window
   if (btnOpenBookmarksEl) {
     btnOpenBookmarksEl.addEventListener('click', () => {
-      window.location.href = 'action://open-bookmarks';
+      dispatchAction('action://open-bookmarks');
     });
   }
 
@@ -800,6 +839,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Signal ready to C++ ProcessManager
-  window.location.href = 'action://ready';
+  dispatchAction('action://ready');
 });
 

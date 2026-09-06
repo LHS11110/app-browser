@@ -20,6 +20,7 @@ struct WindowConfig {
   int parent_pid = 0;
   bool is_translucent = false;
   float alpha = 1.0f;
+  bool start_hidden = false;
 };
 
 inline WindowConfig ParseConfig(int argc, char* argv[]) {
@@ -42,6 +43,8 @@ inline WindowConfig ParseConfig(int argc, char* argv[]) {
 
     if (arg == "--child") {
       config.is_child = true;
+    } else if (arg == "--hidden") {
+      config.start_hidden = true;
     } else if (arg == "--search") {
       config.is_search = true;
     } else if (arg.rfind(parent_pid_prefix, 0) == 0) {
