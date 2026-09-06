@@ -393,23 +393,30 @@ document.addEventListener('DOMContentLoaded', () => {
     const now = new Date();
     lastSyncTimeEl.textContent = `동기화: ${now.toLocaleTimeString()}`;
 
-    // On initial list load, synchronize visibility for any collapsed groups:
-    // This ensures that if a folder is closed, all child processes inside it are immediately hidden
+    // On initial list load and every process list update:
+    // Ensure that if a folder is closed, all child processes inside it are immediately hidden
     if (!initialVisibilitySynced && currentProcesses.length > 0) {
       initialVisibilitySynced = true;
-      groups.forEach((g, idx) => {
+      groups.forEach((g) => {
         if (g.collapsed) {
-          const hasProcs = currentProcesses.some(p => {
-            const m = processMeta[String(p.pid)];
-            const gid = (m && m.groupId) ? m.groupId : (p.groupId || 'default');
-            return gid === g.id;
-          });
-          if (hasProcs) {
-            dispatchAction(`action://set-group-visibility?groupId=${encodeURIComponent(g.id)}&visible=0`);
-          }
+          dispatchAction(`action://set-group-visibility?groupId=${encodeURIComponent(g.id)}&visible=0`);
         }
       });
     }
+
+    // Continuously ensure any process inside a collapsed folder is marked and set to hidden
+    groups.forEach((g) => {
+      if (g.collapsed) {
+        currentProcesses.forEach((p) => {
+          const m = processMeta[String(p.pid)];
+          const gid = (m && m.groupId) ? m.groupId : (p.groupId || 'default');
+          if (gid === g.id && p.visible !== false) {
+            p.visible = false;
+            dispatchAction(`action://set-child-visibility?pid=${p.pid}&visible=0`);
+          }
+        });
+      }
+    });
 
     render();
   };

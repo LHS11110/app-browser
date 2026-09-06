@@ -64,10 +64,15 @@ class AppBrowserWindowDelegate : public CefWindowDelegate {
       window->SetBackgroundColor(CefColorSetARGB(0, 0, 0, 0));
       browser_view_->SetBackgroundColor(CefColorSetARGB(0, 0, 0, 0));
     }
-    window->Show();
-    window->Activate();
-    window->BringToTop();
-    ActivateApplication();
+    if (!config_.start_hidden) {
+      window->Show();
+      window->Activate();
+      window->BringToTop();
+      ActivateApplication();
+    } else {
+      window->Hide();
+      HideCurrentAppProcess(window);
+    }
     if (config_.is_translucent) {
       SetWindowTranslucent(window->GetWindowHandle(), config_.alpha);
     } else {

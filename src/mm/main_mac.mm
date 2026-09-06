@@ -344,14 +344,18 @@ int main(int argc, char* argv[]) {
     [AppBrowserApplication sharedApplication];
     CHECK([NSApp isKindOfClass:[AppBrowserApplication class]]);
 
+    app_browser::WindowConfig config = app_browser::ParseConfig(argc, argv);
+
     // Ensure the application is registered as a regular GUI application with macOS WindowServer
     [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
-    [NSApp activateIgnoringOtherApps:YES];
+    if (!config.start_hidden) {
+      [NSApp activateIgnoringOtherApps:YES];
+    } else {
+      [NSApp hide:nil];
+    }
 
     AppBrowserAppDelegate* delegate = [[AppBrowserAppDelegate alloc] init];
     [NSApp setDelegate:delegate];
-
-    app_browser::WindowConfig config = app_browser::ParseConfig(argc, argv);
 
     NSString* resourcePath = [[NSBundle mainBundle] resourcePath];
     NSString* startHtmlPath = [resourcePath stringByAppendingPathComponent:@"web/search/index.html"];

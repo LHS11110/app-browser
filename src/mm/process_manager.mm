@@ -135,15 +135,6 @@ int ProcessManager::SpawnChild(const std::string& url, bool visible) {
             [childApp activateWithOptions:NSApplicationActivateIgnoringOtherApps];
           }
         });
-      } else {
-        // If spawned hidden, guarantee it remains hidden
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(300 * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{
-          NSRunningApplication* childApp =
-              [NSRunningApplication runningApplicationWithProcessIdentifier:pid];
-          if (childApp) {
-            [childApp hide];
-          }
-        });
       }
     }
   }
@@ -613,6 +604,13 @@ void RegisterChildVisibilityIpc(CefRefPtr<CefWindow> window) {
                   if (!visible) {
                     if (window) {
                       window->Hide();
+                      CefWindowHandle handle = window->GetWindowHandle();
+                      if (handle) {
+                        NSView* view = CAST_CEF_WINDOW_HANDLE_TO_NSVIEW(handle);
+                        if (view && [view window]) {
+                          [[view window] orderOut:nil];
+                        }
+                      }
                     }
                     [NSApp hide:nil];
                   } else {
@@ -620,6 +618,13 @@ void RegisterChildVisibilityIpc(CefRefPtr<CefWindow> window) {
                     if (window) {
                       window->Show();
                       window->BringToTop();
+                      CefWindowHandle handle = window->GetWindowHandle();
+                      if (handle) {
+                        NSView* view = CAST_CEF_WINDOW_HANDLE_TO_NSVIEW(handle);
+                        if (view && [view window]) {
+                          [[view window] makeKeyAndOrderFront:nil];
+                        }
+                      }
                     }
                     [NSApp activateIgnoringOtherApps:YES];
                   }
@@ -631,10 +636,15 @@ void HideCurrentAppProcess(CefRefPtr<CefWindow> window) {
   @autoreleasepool {
     if (window) {
       window->Hide();
+      CefWindowHandle handle = window->GetWindowHandle();
+      if (handle) {
+        NSView* view = CAST_CEF_WINDOW_HANDLE_TO_NSVIEW(handle);
+        if (view && [view window]) {
+          [[view window] orderOut:nil];
+        }
+      }
     }
-    dispatch_async(dispatch_get_main_queue(), ^{
-      [NSApp hide:nil];
-    });
+    [NSApp hide:nil];
   }
 }
 
@@ -700,13 +710,8 @@ void ProcessManager::RestoreSession() {
       BOOL visible = (item[@"visible"] != nil) ? [item[@"visible"] boolValue] : YES;
 
       int new_pid = SpawnChild(url, visible);
-      if (new_pid > 0) {
-        if (!name.empty() || !groupId.empty()) {
-          UpdateProcessMeta(new_pid, name, groupId);
-        }
-        if (!visible) {
-          SetChildVisibility(new_pid, false);
-        }
+      if (new_pid > 0 && (!name.empty() || !groupId.empty())) {
+        UpdateProcessMeta(new_pid, name, groupId);
       }
     }
   }
